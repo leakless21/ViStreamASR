@@ -1,3 +1,0 @@
-[console_scripts]
-vistream-asr = ViStreamASR.cli:cli_main
-vstreamasr = ViStreamASR.cli:cli_main
