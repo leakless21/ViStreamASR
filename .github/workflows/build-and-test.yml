@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
         include:
           # Test on macOS ARM64 (Apple Silicon)
           - os: macos-latest
@@ -58,6 +58,9 @@ jobs:
         pip install -e .
     
     - name: Run tests
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
       run: |
         python test_library.py
     
