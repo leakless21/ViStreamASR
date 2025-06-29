@@ -10,6 +10,7 @@ This module provides the complete streaming ASR functionality including:
 All functionality is consolidated in this single module.
 """
 
+import sys
 import os
 import torch
 from typing import Tuple, List, Generator, Optional, Dict, Any
@@ -23,6 +24,37 @@ import tarfile
 import tempfile
 import requests
 from pathlib import Path
+
+# Fix encoding issues on Windows
+if sys.platform.startswith('win'):
+    import io
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except:
+            pass
+    else:
+        # Fallback for older Python versions
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# Define symbols that work across platforms
+symbols = {
+    'tool': '🔧' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[CONFIG]',
+    'check': '✅' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[OK]',
+    'download': '📥' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[DOWN]',
+    'loading': '🔄' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[LOAD]',
+    'rocket': '🚀' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[GPU]',
+    'ruler': '📏' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[SIZE]',
+    'warning': '⚠️' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[WARN]',
+    'green': '🟢' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[PROC]',
+    'chart': '📊' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[DATA]',
+    'buffer': '📈' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[BUF]',
+    'memo': '📝' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[TEXT]',
+    'clean': '🧹' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[CLEAN]',
+    'clock': '⏰' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[TIME]',
+    'finish': '🏁' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[END]',
+    'skip': '⏭️' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[SKIP]',
+}
 
 # GPU configuration
 use_gpu = torch.cuda.is_available()
@@ -84,14 +116,14 @@ def load_models(debug_mode=False):
     model_url = "https://huggingface.co/nguyenvulebinh/ViStreamASR/resolve/main/pytorch_model.bin"
     
     if debug_mode:
-        print(f"🔧 [ENGINE] Cache directory: {cache_dir}")
-        print(f"🔧 [ENGINE] Model path: {model_path}")
+        print(f"{symbols['tool']} [ENGINE] Cache directory: {cache_dir}")
+        print(f"{symbols['tool']} [ENGINE] Model path: {model_path}")
     
     # Check if model exists in cache, if not download it
     if not model_path.exists():
         if debug_mode:
-            print(f"📥 [ENGINE] Model not found in cache, downloading...")
-            print(f"📥 [ENGINE] URL: {model_url}")
+            print(f"{symbols['download']} [ENGINE] Model not found in cache, downloading...")
+            print(f"{symbols['download']} [ENGINE] URL: {model_url}")
         
         try:
             # Download the model with progress indication
@@ -101,7 +133,7 @@ def load_models(debug_mode=False):
             total_size = int(response.headers.get('content-length', 0))
             downloaded_size = 0
             
-            print(f"📥 Downloading ViStreamASR model to cache...")
+            print(f"{symbols['download']} Downloading ViStreamASR model to cache...")
             with open(model_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
@@ -111,7 +143,7 @@ def load_models(debug_mode=False):
                             progress = (downloaded_size / total_size) * 100
                             print(f"\rDownloading... {progress:.1f}% ({downloaded_size}/{total_size} bytes)", end='', flush=True)
             
-            print(f"\n✅ Model downloaded successfully to cache")
+            print(f"\n{symbols['check']} Model downloaded successfully to cache")
             
         except requests.RequestException as e:
             raise ConnectionError(f"Failed to download model from {model_url}: {e}")
@@ -119,13 +151,13 @@ def load_models(debug_mode=False):
             raise RuntimeError(f"Error downloading model: {e}")
     else:
         if debug_mode:
-            print(f"✅ [ENGINE] Model found in cache")
+            print(f"{symbols['check']} [ENGINE] Model found in cache")
     
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")
     
     if debug_mode:
-        print(f"🔄 [ENGINE] Loading acoustic model from cache...")
+        print(f"{symbols['loading']} [ENGINE] Loading acoustic model from cache...")
     
     with tarfile.open(model_path, 'r') as tar:
         # Load acoustic model
@@ -147,16 +179,16 @@ def load_models(debug_mode=False):
             if use_gpu:
                 model = model.cuda()
                 if debug_mode:
-                    print(f"🚀 [ENGINE] Model loaded on GPU")
+                    print(f"{symbols['rocket']} [ENGINE] Model loaded on GPU")
             else:
                 if debug_mode:
-                    print(f"🔧 [ENGINE] Model loaded on CPU")
+                    print(f"{symbols['tool']} [ENGINE] Model loaded on CPU")
                 
         except KeyError as e:
             raise FileNotFoundError(f"Acoustic model not found in model file: {e}")
     
     if debug_mode:
-        print(f"🔄 [ENGINE] Loading language models from cache...")
+        print(f"{symbols['loading']} [ENGINE] Loading language models from cache...")
     
     with tarfile.open(model_path, 'r') as tar:
         # Extract text files to temporary files for the decoder
@@ -238,7 +270,7 @@ def load_models(debug_mode=False):
                 pass
     
     if debug_mode:
-        print(f"✅ [ENGINE] Models loaded successfully from cache!")
+        print(f"{symbols['check']} [ENGINE] Models loaded successfully from cache!")
     
     return model, ngram_beam_search_decoder, beam_search_decoder
 
@@ -424,9 +456,9 @@ class ASREngine:
         )
         
         if self.debug_mode:
-            print(f"🔧 [CONFIG] Chunk size: {self.chunk_size_ms}ms")
-            print(f"🔧 [CONFIG] Max duration before forced finalization: {self.max_duration_before_forced_finalization}s")
-            print(f"🔧 [CONFIG] Max chunks before forced finalization: {self.max_chunks_before_forced_finalization}")
+            print(f"{symbols['tool']} [CONFIG] Chunk size: {self.chunk_size_ms}ms")
+            print(f"{symbols['tool']} [CONFIG] Max duration before forced finalization: {self.max_duration_before_forced_finalization}s")
+            print(f"{symbols['tool']} [CONFIG] Max chunks before forced finalization: {self.max_chunks_before_forced_finalization}")
         
         # Timing tracking for pure ASR performance
         self.asr_processing_time = 0.0
@@ -441,11 +473,11 @@ class ASREngine:
     def reset_state(self):
         """Reset ASR state and transcription."""
         if self.debug_mode:
-            print(f"🧹 [STATE] Resetting ASR state...")
+            print(f"{symbols['clean']} [STATE] Resetting ASR state...")
         if self.asr_realtime_model is not None:
             self.asr_realtime_model.reset_cache()
             if self.debug_mode:
-                print(f"🧹 [STATE] Incremental ASR cache cleared")
+                print(f"{symbols['clean']} [STATE] Incremental ASR cache cleared")
         
         old_transcription = self.current_transcription
         self.current_transcription = ""
@@ -458,7 +490,7 @@ class ASREngine:
         self.asr_audio_duration = 0.0
         
         if self.debug_mode:
-            print(f"🧹 [STATE] State reset complete. Old transcription: '{old_transcription}'")
+            print(f"{symbols['clean']} [STATE] State reset complete. Old transcription: '{old_transcription}'")
     
     def get_asr_rtf(self):
         """Get the pure ASR processing RTF (computational performance only)."""
@@ -522,19 +554,19 @@ class ASREngine:
             if is_last and actual_samples < expected_samples:
                 # Last chunk can be shorter - this is normal
                 if self.debug_mode:
-                    print(f"📏 [CHUNK-SIZE] Last chunk is shorter: {actual_samples}/{expected_samples} samples ({actual_samples/sample_rate*1000:.1f}ms/{self.chunk_size_ms}ms)")
+                    print(f"{symbols['ruler']} [CHUNK-SIZE] Last chunk is shorter: {actual_samples}/{expected_samples} samples ({actual_samples/sample_rate*1000:.1f}ms/{self.chunk_size_ms}ms)")
             elif actual_samples < expected_samples:
                 # Non-last chunk is shorter than expected - potential issue
                 if self.debug_mode:
-                    print(f"⚠️  [CHUNK-SIZE] Chunk shorter than expected: {actual_samples}/{expected_samples} samples ({actual_samples/sample_rate*1000:.1f}ms/{self.chunk_size_ms}ms)")
+                    print(f"{symbols['warning']}  [CHUNK-SIZE] Chunk shorter than expected: {actual_samples}/{expected_samples} samples ({actual_samples/sample_rate*1000:.1f}ms/{self.chunk_size_ms}ms)")
             else:
                 # Chunk is longer than expected - potential issue
                 if self.debug_mode:
-                    print(f"⚠️  [CHUNK-SIZE] Chunk longer than expected: {actual_samples}/{expected_samples} samples ({actual_samples/sample_rate*1000:.1f}ms/{self.chunk_size_ms}ms)")
+                    print(f"{symbols['warning']}  [CHUNK-SIZE] Chunk longer than expected: {actual_samples}/{expected_samples} samples ({actual_samples/sample_rate*1000:.1f}ms/{self.chunk_size_ms}ms)")
         else:
             # Perfect size match
             if self.debug_mode:
-                print(f"✅ [CHUNK-SIZE] Perfect size: {actual_samples} samples ({self.chunk_size_ms}ms)")
+                print(f"{symbols['check']} [CHUNK-SIZE] Perfect size: {actual_samples} samples ({self.chunk_size_ms}ms)")
         
         if self.asr_realtime_model is None:
             return {
@@ -550,7 +582,7 @@ class ASREngine:
         buffer_size = self.buffer_emission.size(1) if self.buffer_emission is not None else 0
         self.chunks_since_last_finalization += 1
         if self.debug_mode:
-            print(f"🔧 [CHUNK] Audio: {len(audio_data)} samples | Buffer: {buffer_size} frames | is_last: {is_last} | Chunks since finalization: {self.chunks_since_last_finalization}")
+            print(f"{symbols['tool']} [CHUNK] Audio: {len(audio_data)} samples | Buffer: {buffer_size} frames | is_last: {is_last} | Chunks since finalization: {self.chunks_since_last_finalization}")
         
         # Convert to tensor and normalize
         audio_tensor = self._prepare_audio_tensor(audio_data)
@@ -558,66 +590,66 @@ class ASREngine:
         # Skip processing if chunk is too short
         if len(audio_tensor) < 320:
             if self.debug_mode:
-                print(f"⏭️  [CHUNK] Skipping short chunk: {len(audio_tensor)} samples < 320")
+                print(f"{symbols['skip']}  [CHUNK] Skipping short chunk: {len(audio_tensor)} samples < 320")
             return {
                 'current_transcription': self.current_transcription,
                 'new_final_text': None
             }
         
         if self.debug_mode:
-            print(f"✅ [CHUNK] Processing valid chunk: {len(audio_tensor)} samples")
+            print(f"{symbols['check']} [CHUNK] Processing valid chunk: {len(audio_tensor)} samples")
         
         result = self._create_default_result()
         
         # Handle last chunk
         if is_last:
             if self.debug_mode:
-                print(f"🏁 [LAST] Processing final chunk with is_last=True")
+                print(f"{symbols['finish']} [LAST] Processing final chunk with is_last=True")
             
             if len(audio_tensor) > 0:
                 try:
                     if self.debug_mode:
-                        print(f"🏁 [LAST] Processing final audio chunk first...")
+                        print(f"{symbols['finish']} [LAST] Processing final audio chunk first...")
                     encoder_out, emission = self.asr_realtime_model.forward(audio_tensor, last=False)
                     
                     if emission is not None:
                         emission_frames = emission.size(1)
                         if self.debug_mode:
-                            print(f"🏁 [LAST] Final chunk added {emission_frames} frames to buffer")
+                            print(f"{symbols['finish']} [LAST] Final chunk added {emission_frames} frames to buffer")
                         self._update_buffers(emission, encoder_out)
                 except Exception as e:
                     if self.debug_mode:
-                        print(f"⚠️  [LAST] Error processing final audio chunk: {e}")
+                        print(f"{symbols['warning']}  [LAST] Error processing final audio chunk: {e}")
             
             if self.buffer_emission is not None:
                 buffer_size = self.buffer_emission.size(1)
                 if self.debug_mode:
-                    print(f"🏁 [LAST] Buffer has {buffer_size} frames for final processing")
+                    print(f"{symbols['finish']} [LAST] Buffer has {buffer_size} frames for final processing")
                 try:
                     encoder_out, emission = self.asr_realtime_model.forward(torch.tensor([], dtype=torch.float32, device=device), last=True)
                     if self.debug_mode:
-                        print(f"🏁 [LAST] Incremental ASR finalization complete")
+                        print(f"{symbols['finish']} [LAST] Incremental ASR finalization complete")
                     
                     if self.buffer_emission.size(1) > 0:
                         if self.debug_mode:
-                            print(f"🏁 [LAST] Running final LM pipeline...")
+                            print(f"{symbols['finish']} [LAST] Running final LM pipeline...")
                         final_text = self._run_lm_pipeline(self.buffer_emission, self.buffer_encode_out)
                         if self.debug_mode:
-                            print(f"🏁 [LAST] Final text set: '{final_text}'")
+                            print(f"{symbols['finish']} [LAST] Final text set: '{final_text}'")
                         result['new_final_text'] = final_text
                     else:
                         if self.debug_mode:
-                            print(f"🏁 [LAST] Buffer is empty, no final processing needed")
+                            print(f"{symbols['finish']} [LAST] Buffer is empty, no final processing needed")
                     
                     if self.debug_mode:
-                        print(f"🏁 [LAST] Resetting buffers after final processing")
+                        print(f"{symbols['finish']} [LAST] Resetting buffers after final processing")
                     self._reset_buffers()
                 except Exception as e:
                     if self.debug_mode:
-                        print(f"⚠️  [LAST] Final chunk processing error (ignored): {e}")
+                        print(f"{symbols['warning']}  [LAST] Final chunk processing error (ignored): {e}")
             else:
                 if self.debug_mode:
-                    print(f"🏁 [LAST] No buffer for final processing")
+                    print(f"{symbols['finish']} [LAST] No buffer for final processing")
             
             asr_end_time = time.time()
             self.asr_processing_time += (asr_end_time - asr_start_time)
@@ -629,7 +661,7 @@ class ASREngine:
         if len(audio_tensor) > 0:
             try:
                 if self.debug_mode:
-                    print(f"🟢 [SPEECH] Processing speech chunk...")
+                    print(f"{symbols['green']} [SPEECH] Processing speech chunk...")
                 
                 encoder_out, emission = self.asr_realtime_model.forward(audio_tensor, last=False)
                 
@@ -637,37 +669,37 @@ class ASREngine:
                     emission_frames = emission.size(1)
                     encoder_frames = encoder_out.size(1)
                     if self.debug_mode:
-                        print(f"📊 [ASR] New frames - Emission: {emission_frames}, Encoder: {encoder_frames}")
+                        print(f"{symbols['chart']} [ASR] New frames - Emission: {emission_frames}, Encoder: {encoder_frames}")
                     
                     old_buffer_size = self.buffer_emission.size(1) if self.buffer_emission is not None else 0
                     if self.buffer_emission is None:
                         self._update_buffers(emission, encoder_out)
                         if self.debug_mode:
-                            print(f"📈 [BUFFER] Created new buffer with {emission_frames} frames")
+                            print(f"{symbols['buffer']} [BUFFER] Created new buffer with {emission_frames} frames")
                     else:
                         self._update_buffers(emission, encoder_out)
                         if self.debug_mode:
-                            print(f"📈 [BUFFER] Extended buffer: {old_buffer_size} → {self.buffer_emission.size(1)} frames")
+                            print(f"{symbols['buffer']} [BUFFER] Extended buffer: {old_buffer_size} → {self.buffer_emission.size(1)} frames")
                     
                     beam_result = ngram_beam_search(self.beam_search, self.buffer_emission)
                     new_transcription = beam_result[0][0] if beam_result[0] else ""
                     
                     if new_transcription != self.current_transcription:
                         if self.debug_mode:
-                            print(f"📝 [PARTIAL] '{self.current_transcription}' → '{new_transcription}'")
+                            print(f"{symbols['memo']} [PARTIAL] '{self.current_transcription}' → '{new_transcription}'")
                         self.current_transcription = new_transcription
                     else:
                         if self.debug_mode:
-                            print(f"📝 [PARTIAL] No change: '{new_transcription}'")
+                            print(f"{symbols['memo']} [PARTIAL] No change: '{new_transcription}'")
                     
                     result['current_transcription'] = self.current_transcription
                 else:
                     if self.debug_mode:
-                        print(f"⚠️  [ASR] No emission returned from forward pass")
+                        print(f"{symbols['warning']}  [ASR] No emission returned from forward pass")
                     
             except Exception as e:
                 if self.debug_mode:
-                    print(f"⚠️  ASR processing error (chunk skipped): {e}")
+                    print(f"{symbols['warning']}  ASR processing error (chunk skipped): {e}")
                 result['current_transcription'] = self.current_transcription
         
         # Check for forced finalization
@@ -677,11 +709,11 @@ class ASREngine:
         
         if force_finalization:
             if self.debug_mode:
-                print(f"⏰ [FORCED] Triggering forced finalization after {self.chunks_since_last_finalization} chunks")
+                print(f"{symbols['clock']} [FORCED] Triggering forced finalization after {self.chunks_since_last_finalization} chunks")
             try:
                 final_text = self._run_lm_pipeline(self.buffer_emission, self.buffer_encode_out)
                 if self.debug_mode:
-                    print(f"🏁 [FORCED-FINAL] Forced finalization: '{final_text}'")
+                    print(f"{symbols['finish']} [FORCED-FINAL] Forced finalization: '{final_text}'")
                 
                 result['new_final_text'] = final_text
                 self.chunks_since_last_finalization = 0
@@ -695,7 +727,7 @@ class ASREngine:
                 
             except Exception as e:
                 if self.debug_mode:
-                    print(f"⚠️  [FORCED] Forced finalization error: {e}")
+                    print(f"{symbols['warning']}  [FORCED] Forced finalization error: {e}")
             
             self.chunks_since_last_finalization = 0
         

@@ -54,6 +54,9 @@ jobs:
         pip install -r requirements.txt
     
     - name: Install package in development mode
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
       run: |
         pip install -e .
     
@@ -65,17 +68,25 @@ jobs:
         python test_library.py
     
     - name: Test CLI commands
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
       run: |
-        python -m ViStreamASR.cli --help || true
-        # Test basic functionality without audio processing
+        # Test CLI help (should work without audio files)
+        vistream-asr --help || echo "CLI help failed but continuing..."
+        # Test basic import functionality
         python -c "
         import sys
         sys.path.insert(0, 'src')
-        from streaming import StreamingASR
-        from core import ASREngine
-        print('✅ All imports successful')
-        asr = StreamingASR(debug=False)
-        print(f'✅ StreamingASR initialized: {asr.chunk_size_ms}ms chunks')
+        try:
+            from streaming import StreamingASR
+            from core import ASREngine  
+            print('[OK] All imports successful')
+            asr = StreamingASR(debug=False)
+            print(f'[OK] StreamingASR initialized: {asr.chunk_size_ms}ms chunks')
+        except Exception as e:
+            print(f'[ERROR] Import failed: {e}')
+            sys.exit(1)
         "
 
   build-wheels:

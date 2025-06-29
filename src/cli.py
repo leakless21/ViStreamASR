@@ -11,6 +11,35 @@ import sys
 import time
 from pathlib import Path
 
+# Fix encoding issues on Windows
+if sys.platform.startswith('win'):
+    import io
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except:
+            pass
+    else:
+        # Fallback for older Python versions
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# Define symbols that work across platforms
+symbols = {
+    'mic': '🎤' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[MIC]',
+    'folder': '📁' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[FILE]',
+    'ruler': '📏' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[SIZE]',
+    'clock': '⏰' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[TIME]',
+    'tool': '🔧' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[CONFIG]',
+    'check': '✅' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[OK]',
+    'wave': '🎵' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[AUDIO]',
+    'memo': '📝' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[TEXT]',
+    'book': '📖' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[INFO]',
+    'home': '🏠' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[HOME]',
+    'brain': '🧠' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[MODEL]',
+    'rocket': '🚀' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[GPU]',
+    'stopwatch': '⏱️' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[TIME]',
+}
+
 # Handle import for both installed package and development mode
 try:
     from .streaming import StreamingASR
@@ -28,12 +57,12 @@ def transcribe_file_streaming(audio_file, chunk_size_ms=640, auto_finalize_after
         auto_finalize_after: Maximum duration before auto-finalization (seconds)
         debug: Enable debug logging
     """
-    print(f"🎤 ViStreamASR File Transcription")
+    print(f"{symbols['mic']} ViStreamASR File Transcription")
     print(f"=" * 50)
-    print(f"📁 Audio file: {audio_file}")
-    print(f"📏 Chunk size: {chunk_size_ms}ms")
-    print(f"⏰ Auto-finalize after: {auto_finalize_after}s")
-    print(f"🔧 Debug mode: {debug}")
+    print(f"{symbols['folder']} Audio file: {audio_file}")
+    print(f"{symbols['ruler']} Chunk size: {chunk_size_ms}ms")
+    print(f"{symbols['clock']} Auto-finalize after: {auto_finalize_after}s")
+    print(f"{symbols['tool']} Debug mode: {debug}")
     print()
     
     if not os.path.exists(audio_file):
@@ -64,13 +93,13 @@ def transcribe_file_streaming(audio_file, chunk_size_ms=640, auto_finalize_after
             
             if result.get('partial') and result.get('text'):
                 current_partial = result['text']
-                print(f"📝 [PARTIAL {chunk_info.get('chunk_id', '?'):3d}] {current_partial}")
+                print(f"{symbols['memo']} [PARTIAL {chunk_info.get('chunk_id', '?'):3d}] {current_partial}")
             
             if result.get('final') and result.get('text'):
                 final_text = result['text']
                 final_segments.append(final_text)
                 current_partial = ""
-                print(f"✅ [FINAL   {chunk_info.get('chunk_id', '?'):3d}] {final_text}")
+                print(f"{symbols['check']} [FINAL   {chunk_info.get('chunk_id', '?'):3d}] {final_text}")
                 print(f"-" * 60)
         
     except KeyboardInterrupt:
@@ -86,20 +115,30 @@ def transcribe_file_streaming(audio_file, chunk_size_ms=640, auto_finalize_after
     
     print(f"\n📊 TRANSCRIPTION RESULTS")
     print(f"=" * 50)
-    print(f"⏱️  Processing time: {total_time:.2f} seconds")
-    print(f"📝 Final segments: {len(final_segments)}")
+    print(f"{symbols['stopwatch']}  Processing time: {total_time:.2f} seconds")
+    print(f"{symbols['memo']} Final segments: {len(final_segments)}")
     
-    print(f"\n📝 Complete Transcription:")
-    print(f"-" * 50)
+    print(f"\n{symbols['memo']} Complete Transcription:")
+    print(f"=" * 60)
     complete_transcription = " ".join(final_segments)
-    print(f"{complete_transcription}")
+    # Wrap text at 80 characters for better readability
+    words = complete_transcription.split()
+    lines = []
+    current_line = ""
+    for word in words:
+        if len(current_line + " " + word) <= 80:
+            current_line += (" " if current_line else "") + word
+        else:
+            if current_line:
+                lines.append(current_line)
+            current_line = word
+    if current_line:
+        lines.append(current_line)
     
-    print(f"\n📋 Individual Segments:")
-    print(f"-" * 50)
-    for i, segment in enumerate(final_segments, 1):
-        print(f"{i:2d}. {segment}")
+    for line in lines:
+        print(line)
     
-    print(f"\n✅ Transcription completed successfully!")
+    print(f"\n{symbols['check']} Transcription completed successfully!")
     return 0
 
 
@@ -173,14 +212,14 @@ Examples:
         )
     
     elif args.command == 'info':
-        print(f"🎤 ViStreamASR - Vietnamese Streaming ASR Library")
+        print(f"{symbols['mic']} ViStreamASR - Vietnamese Streaming ASR Library")
         print(f"=" * 50)
-        print(f"📖 Description: Simple and efficient streaming ASR for Vietnamese")
-        print(f"🏠 Cache directory: ~/.cache/ViStreamASR")
-        print(f"🧠 Model: ViStreamASR (U2-based)")
-        print(f"🔧 Optimal chunk size: 640ms")
-        print(f"⏰ Default auto-finalize: 15 seconds")
-        print(f"🚀 GPU support: {'Available' if StreamingASR(debug=False)._ensure_engine_initialized() or True else 'Not available'}")
+        print(f"{symbols['book']} Description: Simple and efficient streaming ASR for Vietnamese")
+        print(f"{symbols['home']} Cache directory: ~/.cache/ViStreamASR")
+        print(f"{symbols['brain']} Model: ViStreamASR (U2-based)")
+        print(f"{symbols['tool']} Optimal chunk size: 640ms")
+        print(f"{symbols['clock']} Default auto-finalize: 15 seconds")
+        print(f"{symbols['rocket']} GPU support: {'Available' if StreamingASR(debug=False)._ensure_engine_initialized() or True else 'Not available'}")
         
         print(f"\nUsage examples:")
         print(f"  vistream-asr transcribe audio.wav")

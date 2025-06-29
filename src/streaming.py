@@ -11,6 +11,8 @@ import torch
 import torchaudio
 from typing import Generator, Dict, Any, Optional
 from pathlib import Path
+import sys
+import numpy as np
 
 # Handle imports for both installed package and development mode
 try:
@@ -18,6 +20,26 @@ try:
 except ImportError:
     from core import ASREngine
 
+# Fix encoding issues on Windows
+if sys.platform.startswith('win'):
+    import io
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except:
+            pass
+    else:
+        # Fallback for older Python versions
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# Define symbols that work across platforms
+symbols = {
+    'tool': '🔧' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[CONFIG]',
+    'check': '✅' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[OK]',
+    'ruler': '📏' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[SIZE]',
+    'folder': '📁' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[FILE]',
+    'wave': '🎵' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[AUDIO]',
+}
 
 class StreamingASR:
     """
@@ -49,13 +71,13 @@ class StreamingASR:
         self.engine = None
         
         if self.debug:
-            print(f"🔧 [StreamingASR] Initialized with {chunk_size_ms}ms chunks, auto-finalize after {auto_finalize_after}s, debug={debug}")
+            print(f"{symbols['tool']} [StreamingASR] Initialized with {chunk_size_ms}ms chunks, auto-finalize after {auto_finalize_after}s, debug={debug}")
     
     def _ensure_engine_initialized(self):
         """Lazy initialization of the ASR engine."""
         if self.engine is None:
             if self.debug:
-                print(f"🔄 [StreamingASR] Initializing ASR engine...")
+                print(f"{symbols['tool']} [StreamingASR] Initializing ASR engine...")
             
             self.engine = ASREngine(
                 chunk_size_ms=self.chunk_size_ms,
@@ -65,7 +87,7 @@ class StreamingASR:
             self.engine.initialize_models()
             
             if self.debug:
-                print(f"✅ [StreamingASR] ASR engine ready")
+                print(f"{symbols['check']} [StreamingASR] ASR engine ready")
     
     def stream_from_file(self, audio_file: str, chunk_size_ms: Optional[int] = None) -> Generator[Dict[str, Any], None, None]:
         """
@@ -87,8 +109,8 @@ class StreamingASR:
         chunk_size = chunk_size_ms or self.chunk_size_ms
         
         if self.debug:
-            print(f"🎵 [StreamingASR] Starting file stream: {audio_file}")
-            print(f"📏 [StreamingASR] Chunk size: {chunk_size}ms")
+            print(f"{symbols['wave']} [StreamingASR] Starting file stream: {audio_file}")
+            print(f"{symbols['ruler']} [StreamingASR] Chunk size: {chunk_size}ms")
         
         # Load and prepare audio
         audio_data = self._load_audio_file(audio_file)
@@ -99,7 +121,7 @@ class StreamingASR:
         duration = audio_data['duration']
         
         if self.debug:
-            print(f"🎵 [StreamingASR] Audio loaded: {duration:.2f}s, {len(prepared_audio)} samples")
+            print(f"{symbols['wave']} [StreamingASR] Audio loaded: {duration:.2f}s, {len(prepared_audio)} samples")
         
         # Reset engine state
         self.engine.reset_state()
@@ -109,7 +131,7 @@ class StreamingASR:
         total_chunks = (len(prepared_audio) + chunk_size_samples - 1) // chunk_size_samples
         
         if self.debug:
-            print(f"📊 [StreamingASR] Processing {total_chunks} chunks of {chunk_size_samples} samples each")
+            print(f"{symbols['check']} [StreamingASR] Processing {total_chunks} chunks of {chunk_size_samples} samples each")
         
         # Process chunks
         start_time = time.time()
@@ -122,7 +144,7 @@ class StreamingASR:
             is_last = (i == total_chunks - 1)
             
             if self.debug:
-                print(f"\n🔄 [StreamingASR] Processing chunk {i+1}/{total_chunks} ({len(chunk)} samples)")
+                print(f"\n{symbols['tool']} [StreamingASR] Processing chunk {i+1}/{total_chunks} ({len(chunk)} samples)")
             
             # Process chunk
             result = self.engine.process_audio(chunk, is_last=is_last)
@@ -160,10 +182,10 @@ class StreamingASR:
         rtf = self.engine.get_asr_rtf()
         
         if self.debug:
-            print(f"\n✅ [StreamingASR] Processing complete")
-            print(f"⏱️  Total time: {total_time:.2f}s")
-            print(f"🚀 RTF: {rtf:.2f}x")
-            print(f"⚡ Speedup: {duration/total_time:.1f}x")
+            print(f"\n{symbols['check']} [StreamingASR] Processing complete")
+            print(f"{symbols['ruler']}  Total time: {total_time:.2f}s")
+            print(f"{symbols['check']} �� RTF: {rtf:.2f}x")
+            print(f"{symbols['check']} ⚡ Speedup: {duration/total_time:.1f}x")
     
     def stream_from_microphone(self, duration_seconds: Optional[float] = None) -> Generator[Dict[str, Any], None, None]:
         """
@@ -188,12 +210,12 @@ class StreamingASR:
         """Load and prepare audio file for ASR processing."""
         if not os.path.exists(audio_file):
             if self.debug:
-                print(f"❌ [StreamingASR] File not found: {audio_file}")
+                print(f"{symbols['folder']} [StreamingASR] File not found: {audio_file}")
             return None
         
         try:
             if self.debug:
-                print(f"📁 [StreamingASR] Loading: {audio_file}")
+                print(f"{symbols['folder']} [StreamingASR] Loading: {audio_file}")
             
             # Load with torchaudio
             waveform, original_sr = torchaudio.load(audio_file)
@@ -202,7 +224,7 @@ class StreamingASR:
             if waveform.shape[0] > 1:
                 waveform = waveform.mean(dim=0, keepdim=True)
                 if self.debug:
-                    print(f"🔄 [StreamingASR] Converted stereo to mono")
+                    print(f"{symbols['tool']} [StreamingASR] Converted stereo to mono")
             
             # Prepare audio for ASR (convert to 16kHz and normalize)
             prepared_audio = self._prepare_audio_for_asr(waveform.squeeze(), original_sr)
@@ -210,7 +232,7 @@ class StreamingASR:
             duration = len(waveform.squeeze()) / original_sr
             
             if self.debug:
-                print(f"✅ [StreamingASR] Audio prepared: {len(prepared_audio)} samples at 16kHz")
+                print(f"{symbols['check']} [StreamingASR] Audio prepared: {len(prepared_audio)} samples at 16kHz")
             
             return {
                 'waveform': prepared_audio,
@@ -219,7 +241,7 @@ class StreamingASR:
             }
         except Exception as e:
             if self.debug:
-                print(f"❌ [StreamingASR] Error loading audio file: {e}")
+                print(f"{symbols['folder']} [StreamingASR] Error loading audio file: {e}")
             return None
     
     def _prepare_audio_for_asr(self, audio_data, sample_rate):
