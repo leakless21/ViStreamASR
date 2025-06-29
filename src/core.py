@@ -594,7 +594,7 @@ class ASREngine:
                 if self.debug_mode:
                     print(f"🏁 [LAST] Buffer has {buffer_size} frames for final processing")
                 try:
-                    encoder_out, emission = self.asr_realtime_model.forward(torch.tensor([]), last=True)
+                    encoder_out, emission = self.asr_realtime_model.forward(torch.tensor([], dtype=torch.float32, device=device), last=True)
                     if self.debug_mode:
                         print(f"🏁 [LAST] Incremental ASR finalization complete")
                     
