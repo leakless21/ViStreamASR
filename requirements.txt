@@ -1,0 +1,6 @@
+torch>=2.5.0
+torchaudio>=2.5.0
+numpy>=1.19.0
+requests>=2.25.0
+flashlight-text
+librosa 
