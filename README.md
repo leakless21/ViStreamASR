@@ -134,6 +134,11 @@ The U2 model enables both streaming and non-streaming ASR in a unified framework
 - **Latency**: ~640ms with default settings
 - **GPU Support**: Automatic CUDA acceleration when available
 
+## Limitations
+
+- **Audio Input Assumption**: The system assumes audio input is speech. Non-speech audio may produce unexpected results.
+- **Production Recommendation**: For practical use, it's recommended to add VAD (Voice Activity Detection) before running streaming ASR to reduce ASR streaming load and improve efficiency.
+
 ## CLI Commands
 
 ```bash
