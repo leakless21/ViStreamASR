@@ -19,7 +19,7 @@ def main():
         return 1
     
     # Check if example audio file exists
-    audio_file = "linh_ref_long.wav"
+    audio_file = "resource/linh_ref_long.wav"
     if not os.path.exists(audio_file):
         print(f"❌ Example audio file not found: {audio_file}")
         return 1

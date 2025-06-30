@@ -719,6 +719,12 @@ class ASREngine:
                 self.chunks_since_last_finalization = 0
                 self._reset_buffers()
                 
+                # Reset the incremental ASR cache for complete state consistency
+                if self.asr_realtime_model is not None:
+                    self.asr_realtime_model.reset_cache()
+                    if self.debug_mode:
+                        print(f"{symbols['clean']} [FORCED] IncrementalASR cache reset for complete state consistency")
+                
                 asr_end_time = time.time()
                 self.asr_processing_time += (asr_end_time - asr_start_time)
                 self.asr_audio_duration += chunk_duration
