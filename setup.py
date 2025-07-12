@@ -65,6 +65,7 @@ setup(
         "requests>=2.25.0",
         "flashlight-text",
         "librosa",
+        "sounddevice>=0.4.0",
     ],
     extras_require={
         "dev": [
