@@ -4,4 +4,4 @@ numpy>=1.19.0
 requests>=2.25.0
 flashlight-text
 librosa
-sounddevice>=0.4.0
+sounddevice>=0.5.2
