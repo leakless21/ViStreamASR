@@ -34,12 +34,12 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libsndfile1 ffmpeg
+        sudo apt-get install -y libsndfile1 ffmpeg portaudio19-dev
     
     - name: Install system dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install libsndfile ffmpeg
+        brew install libsndfile ffmpeg portaudio
     
     - name: Install system dependencies (Windows)
       if: runner.os == 'Windows'
@@ -84,6 +84,18 @@ jobs:
             print('[OK] All imports successful')
             asr = StreamingASR(debug=False)
             print(f'[OK] StreamingASR initialized: {asr.chunk_size_ms}ms chunks')
+            
+            # Test microphone feature availability (should not fail in CI)
+            try:
+                import sounddevice as sd
+                print('[OK] sounddevice imported successfully')
+                # Don't test actual microphone functionality in CI
+                print('[INFO] Microphone functionality available (not tested in CI)')
+            except ImportError as e:
+                print(f'[WARNING] sounddevice not available: {e}')
+            except Exception as e:
+                print(f'[INFO] sounddevice available but no audio devices in CI: {e}')
+                
         except Exception as e:
             print(f'[ERROR] Import failed: {e}')
             sys.exit(1)
