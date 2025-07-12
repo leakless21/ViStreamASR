@@ -4,7 +4,7 @@ ViStreamASR - Vietnamese Streaming Automatic Speech Recognition Library
 A simple and efficient library for real-time Vietnamese speech recognition.
 """
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __author__ = "ViStreamASR Team"
 
 # Handle imports for both installed package and development mode
