@@ -1,0 +1,98 @@
+[project]
+name = "vistreamasr"
+version = "0.1.4"
+description = "Vietnamese Streaming Automatic Speech Recognition Library with Silero-VAD integration"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "ViStreamASR Team"}
+]
+maintainers = [
+    {name = "ViStreamASR Team"}
+]
+keywords = ["speech-recognition", "vietnamese", "streaming", "asr", "vad", "silero-vad"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "flashlight-text>=0.0.7",
+    "librosa>=0.10.0",
+    "numba>=0.59.0",
+    "llvmlite>=0.41.0",
+    "numpy>=1.22.3",
+    "pytest>=8.4.1",
+    "requests>=2.32.4",
+    "silero-vad>=5.1.2",
+    "sounddevice>=0.5.2",
+    "torch>=2.7.1",
+    "torchaudio>=2.7.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/nguyenvulebinh/ViStreamASR"
+Repository = "https://github.com/nguyenvulebinh/ViStreamASR.git"
+Documentation = "https://github.com/nguyenvulebinh/ViStreamASR#readme"
+"Bug Tracker" = "https://github.com/nguyenvulebinh/ViStreamASR/issues"
+
+[project.scripts]
+vistream-asr = "vistreamasr.cli:cli_main"
+vstreamasr = "vistreamasr.cli:cli_main"
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["vistreamasr"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

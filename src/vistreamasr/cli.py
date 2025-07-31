@@ -49,15 +49,22 @@ except ImportError:
     from streaming import StreamingASR
 
 
-def transcribe_file_streaming(audio_file, chunk_size_ms=640, auto_finalize_after=15.0, debug=False):
+def transcribe_file_streaming(audio_file, chunk_size_ms=640, auto_finalize_after=15.0, debug=False,
+                              use_vad=False, vad_threshold=0.5, vad_min_speech_duration_ms=250,
+                              vad_min_silence_duration_ms=100, vad_speech_pad_ms=30):
     """
     Transcribe an audio file using streaming ASR.
     
     Args:
         audio_file: Path to audio file
-        chunk_size_ms: Chunk size in milliseconds  
+        chunk_size_ms: Chunk size in milliseconds
         auto_finalize_after: Maximum duration before auto-finalization (seconds)
         debug: Enable debug logging
+        use_vad: Enable Voice Activity Detection
+        vad_threshold: VAD speech probability threshold
+        vad_min_speech_duration_ms: Minimum speech duration in milliseconds
+        vad_min_silence_duration_ms: Minimum silence duration in milliseconds
+        vad_speech_pad_ms: Padding added to speech segments in milliseconds
     """
     print(f"{symbols['mic']} ViStreamASR File Transcription")
     print(f"=" * 50)
@@ -73,10 +80,25 @@ def transcribe_file_streaming(audio_file, chunk_size_ms=640, auto_finalize_after
     
     # Initialize StreamingASR
     print(f"🔄 Initializing ViStreamASR...")
+    
+    # Prepare VAD configuration
+    vad_config = None
+    if use_vad:
+        vad_config = {
+            'enabled': True,
+            'threshold': vad_threshold,
+            'min_speech_duration_ms': vad_min_speech_duration_ms,
+            'min_silence_duration_ms': vad_min_silence_duration_ms,
+            'speech_pad_ms': vad_speech_pad_ms,
+            'sample_rate': 16000
+        }
+        print(f"{symbols['tool']} VAD enabled with threshold={vad_threshold}")
+    
     asr = StreamingASR(
-        chunk_size_ms=chunk_size_ms, 
+        chunk_size_ms=chunk_size_ms,
         auto_finalize_after=auto_finalize_after,
-        debug=debug
+        debug=debug,
+        vad_config=vad_config
     )
     
     # Collect results
@@ -144,15 +166,22 @@ def transcribe_file_streaming(audio_file, chunk_size_ms=640, auto_finalize_after
     return 0
 
 
-def transcribe_microphone_streaming(duration_seconds=None, chunk_size_ms=640, auto_finalize_after=15.0, debug=False):
+def transcribe_microphone_streaming(duration_seconds=None, chunk_size_ms=640, auto_finalize_after=15.0, debug=False,
+                                    use_vad=False, vad_threshold=0.5, vad_min_speech_duration_ms=250,
+                                    vad_min_silence_duration_ms=100, vad_speech_pad_ms=30):
     """
     Transcribe from microphone using streaming ASR.
     
     Args:
         duration_seconds: Maximum duration to record (None for infinite)
-        chunk_size_ms: Chunk size in milliseconds  
+        chunk_size_ms: Chunk size in milliseconds
         auto_finalize_after: Maximum duration before auto-finalization (seconds)
         debug: Enable debug logging
+        use_vad: Enable Voice Activity Detection
+        vad_threshold: VAD speech probability threshold
+        vad_min_speech_duration_ms: Minimum speech duration in milliseconds
+        vad_min_silence_duration_ms: Minimum silence duration in milliseconds
+        vad_speech_pad_ms: Padding added to speech segments in milliseconds
     """
     print(f"{symbols['mic']} ViStreamASR Microphone Transcription")
     print(f"=" * 50)
@@ -184,10 +213,25 @@ def transcribe_microphone_streaming(duration_seconds=None, chunk_size_ms=640, au
     
     # Initialize StreamingASR
     print(f"🔄 Initializing ViStreamASR...")
+    
+    # Prepare VAD configuration
+    vad_config = None
+    if use_vad:
+        vad_config = {
+            'enabled': True,
+            'threshold': vad_threshold,
+            'min_speech_duration_ms': vad_min_speech_duration_ms,
+            'min_silence_duration_ms': vad_min_silence_duration_ms,
+            'speech_pad_ms': vad_speech_pad_ms,
+            'sample_rate': 16000
+        }
+        print(f"{symbols['tool']} VAD enabled with threshold={vad_threshold}")
+    
     asr = StreamingASR(
-        chunk_size_ms=chunk_size_ms, 
+        chunk_size_ms=chunk_size_ms,
         auto_finalize_after=auto_finalize_after,
-        debug=debug
+        debug=debug,
+        vad_config=vad_config
     )
     
     # Collect results
@@ -307,6 +351,37 @@ Examples:
         help='Enable debug logging (show detailed processing information)'
     )
     
+    # VAD arguments
+    transcribe_parser.add_argument(
+        '--use-vad',
+        action='store_true',
+        help='Enable Voice Activity Detection to filter silence'
+    )
+    transcribe_parser.add_argument(
+        '--vad-threshold',
+        type=float,
+        default=0.5,
+        help='VAD speech probability threshold (default: 0.5)'
+    )
+    transcribe_parser.add_argument(
+        '--vad-min-speech-duration-ms',
+        type=int,
+        default=250,
+        help='Minimum speech duration in milliseconds (default: 250ms)'
+    )
+    transcribe_parser.add_argument(
+        '--vad-min-silence-duration-ms',
+        type=int,
+        default=100,
+        help='Minimum silence duration in milliseconds (default: 100ms)'
+    )
+    transcribe_parser.add_argument(
+        '--vad-speech-pad-ms',
+        type=int,
+        default=30,
+        help='Padding added to speech segments in milliseconds (default: 30ms)'
+    )
+    
     # Microphone command
     microphone_parser = subparsers.add_parser(
         'microphone',
@@ -338,6 +413,37 @@ Examples:
         help='Enable debug logging (show detailed processing information)'
     )
     
+    # VAD arguments
+    microphone_parser.add_argument(
+        '--use-vad',
+        action='store_true',
+        help='Enable Voice Activity Detection to filter silence'
+    )
+    microphone_parser.add_argument(
+        '--vad-threshold',
+        type=float,
+        default=0.5,
+        help='VAD speech probability threshold (default: 0.5)'
+    )
+    microphone_parser.add_argument(
+        '--vad-min-speech-duration-ms',
+        type=int,
+        default=250,
+        help='Minimum speech duration in milliseconds (default: 250ms)'
+    )
+    microphone_parser.add_argument(
+        '--vad-min-silence-duration-ms',
+        type=int,
+        default=100,
+        help='Minimum silence duration in milliseconds (default: 100ms)'
+    )
+    microphone_parser.add_argument(
+        '--vad-speech-pad-ms',
+        type=int,
+        default=30,
+        help='Padding added to speech segments in milliseconds (default: 30ms)'
+    )
+    
     # Info command
     info_parser = subparsers.add_parser(
         'info',
@@ -354,10 +460,15 @@ Examples:
     
     if args.command == 'transcribe':
         return transcribe_file_streaming(
-            args.audio_file, 
+            args.audio_file,
             chunk_size_ms=args.chunk_size,
             auto_finalize_after=args.auto_finalize_after,
-            debug=args.show_debug
+            debug=args.show_debug,
+            use_vad=args.use_vad,
+            vad_threshold=args.vad_threshold,
+            vad_min_speech_duration_ms=args.vad_min_speech_duration_ms,
+            vad_min_silence_duration_ms=args.vad_min_silence_duration_ms,
+            vad_speech_pad_ms=args.vad_speech_pad_ms
         )
     
     elif args.command == 'microphone':
@@ -365,7 +476,12 @@ Examples:
             duration_seconds=args.duration,
             chunk_size_ms=args.chunk_size,
             auto_finalize_after=args.auto_finalize_after,
-            debug=args.show_debug
+            debug=args.show_debug,
+            use_vad=args.use_vad,
+            vad_threshold=args.vad_threshold,
+            vad_min_speech_duration_ms=args.vad_min_speech_duration_ms,
+            vad_min_silence_duration_ms=args.vad_min_silence_duration_ms,
+            vad_speech_pad_ms=args.vad_speech_pad_ms
         )
     
     elif args.command == 'info':
@@ -377,16 +493,21 @@ Examples:
         print(f"{symbols['tool']} Optimal chunk size: 640ms")
         print(f"{symbols['clock']} Default auto-finalize: 15 seconds")
         print(f"{symbols['rocket']} GPU support: {'Available' if StreamingASR(debug=False)._ensure_engine_initialized() or True else 'Not available'}")
+        print(f"{symbols['tool']} VAD support: Available (Silero-VAD)")
         
         print(f"\nUsage examples:")
         print(f"  vistream-asr transcribe audio.wav")
         print(f"  vistream-asr transcribe audio.wav --chunk-size 500")
         print(f"  vistream-asr transcribe audio.wav --auto-finalize-after 20")
         print(f"  vistream-asr transcribe audio.wav --show-debug")
+        print(f"  vistream-asr transcribe audio.wav --use-vad")
+        print(f"  vistream-asr transcribe audio.wav --use-vad --vad-threshold 0.7")
         print(f"  vistream-asr microphone")
         print(f"  vistream-asr microphone --duration 30")
         print(f"  vistream-asr microphone --chunk-size 500")
         print(f"  vistream-asr microphone --show-debug")
+        print(f"  vistream-asr microphone --use-vad")
+        print(f"  vistream-asr microphone --use-vad --vad-threshold 0.7")
         
         # Check if model is cached
         try:

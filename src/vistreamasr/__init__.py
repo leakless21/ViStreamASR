@@ -1,7 +1,7 @@
 """
 ViStreamASR - Vietnamese Streaming Automatic Speech Recognition Library
 
-A simple and efficient library for real-time Vietnamese speech recognition.
+A simple and efficient library for real-time Vietnamese speech recognition with Silero-VAD integration.
 """
 
 __version__ = "0.1.4"
@@ -11,6 +11,7 @@ __author__ = "ViStreamASR Team"
 try:
     from .streaming import StreamingASR
     from .core import ASREngine
+    from .vad import VADProcessor, VADASRCoordinator
 except ImportError:
     # Fallback for development mode
     import sys
@@ -19,5 +20,6 @@ except ImportError:
     
     from streaming import StreamingASR
     from core import ASREngine
+    from vad import VADProcessor, VADASRCoordinator
 
-__all__ = ["StreamingASR", "ASREngine"] 
+__all__ = ["StreamingASR", "ASREngine", "VADProcessor", "VADASRCoordinator"]

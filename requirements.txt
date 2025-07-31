@@ -1,7 +1,15 @@
-torch>=2.5.0
-torchaudio>=2.5.0
-numpy>=1.19.0
-requests>=2.25.0
-flashlight-text
-librosa
+# Core dependencies for ViStreamASR with Silero-VAD
+torch>=2.7.1
+torchaudio>=2.7.1
+numpy>=1.22.3
+requests>=2.32.4
+flashlight-text>=0.0.7
+librosa>=0.10.0
 sounddevice>=0.5.2
+silero-vad>=5.1.2
+pytest>=8.4.1
+numba>=0.59.0
+llvmlite>=0.41.0
+
+# Development dependencies (install with: pip install -r requirements.txt[dev])
+# Install with: pip install -r requirements.txt[dev]

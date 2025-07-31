@@ -14,12 +14,9 @@ from pathlib import Path
 import sys
 import numpy as np
 import sounddevice as sd
+from .core import ASREngine
+from .vad import VADProcessor, VADASRCoordinator  # New import for VAD
 
-# Handle imports for both installed package and development mode
-try:
-    from .core import ASREngine
-except ImportError:
-    from core import ASREngine
 
 # Fix encoding issues on Windows
 if sys.platform.startswith('win'):
@@ -57,7 +54,7 @@ class StreamingASR:
                 print(f"Final: {result['text']}")
     """
     
-    def __init__(self, chunk_size_ms: int = 640, auto_finalize_after: float = 15.0, debug: bool = False):
+    def __init__(self, chunk_size_ms: int = 640, auto_finalize_after: float = 15.0, debug: bool = False, vad_config: Optional[Dict[str, Any]] = None):
         """
         Initialize StreamingASR.
         
@@ -65,15 +62,36 @@ class StreamingASR:
             chunk_size_ms: Chunk size in milliseconds (default: 640ms for optimal performance)
             auto_finalize_after: Maximum duration in seconds before auto-finalizing a segment (default: 15.0s)
             debug: Enable debug logging
+            vad_config: Configuration for VAD processing (default: None for disabled)
         """
         self.chunk_size_ms = chunk_size_ms
         self.auto_finalize_after = auto_finalize_after
         self.debug = debug
-        self.engine = None
+        self.vad_config = vad_config or {}
+        self.engine: Optional[ASREngine] = None
+        self.vad_processor: Optional[VADProcessor] = None
+        self.vad_coordinator: Optional[VADASRCoordinator] = None
+        
+        # Initialize VAD if enabled
+        if self.vad_config and self.vad_config.get('enabled', False):
+            try:
+                self.vad_processor = VADProcessor(
+                    sample_rate=self.vad_config.get('sample_rate', 16000),
+                    threshold=self.vad_config.get('threshold', 0.5),
+                    min_speech_duration_ms=self.vad_config.get('min_speech_duration_ms', 250),
+                    min_silence_duration_ms=self.vad_config.get('min_silence_duration_ms', 100),
+                    speech_pad_ms=self.vad_config.get('speech_pad_ms', 30)
+                )
+                if self.debug:
+                    print(f"{symbols['tool']} [StreamingASR] VAD processor initialized")
+            except Exception as e:
+                if self.debug:
+                    print(f"{symbols['warning']}  [StreamingASR] Failed to initialize VAD processor: {e}")
+                self.vad_processor = None
         
         if self.debug:
-            print(f"{symbols['tool']} [StreamingASR] Initialized with {chunk_size_ms}ms chunks, auto-finalize after {auto_finalize_after}s, debug={debug}")
-    
+            vad_status = "enabled" if self.vad_processor else "disabled"
+            print(f"{symbols['tool']} [StreamingASR] Initialized with {chunk_size_ms}ms chunks, auto-finalize after {auto_finalize_after}s, debug={debug}, VAD={vad_status}")
     def _ensure_engine_initialized(self):
         """Lazy initialization of the ASR engine."""
         if self.engine is None:
@@ -87,8 +105,15 @@ class StreamingASR:
             )
             self.engine.initialize_models()
             
+            # Initialize VAD coordinator if VAD is enabled
+            if self.vad_processor is not None:
+                self.vad_coordinator = VADASRCoordinator(self.vad_config, self.engine)
+                if self.debug:
+                    print(f"{symbols['tool']} [StreamingASR] VAD-ASR coordinator initialized")
+            
             if self.debug:
                 print(f"{symbols['check']} [StreamingASR] ASR engine ready")
+    
     
     def stream_from_file(self, audio_file: str, chunk_size_ms: Optional[int] = None) -> Generator[Dict[str, Any], None, None]:
         """
@@ -125,6 +150,7 @@ class StreamingASR:
             print(f"{symbols['wave']} [StreamingASR] Audio loaded: {duration:.2f}s, {len(prepared_audio)} samples")
         
         # Reset engine state
+        self._ensure_engine_initialized()
         self.engine.reset_state()
         
         # Calculate chunk parameters
@@ -147,8 +173,29 @@ class StreamingASR:
             if self.debug:
                 print(f"\n{symbols['tool']} [StreamingASR] Processing chunk {i+1}/{total_chunks} ({len(chunk)} samples)")
             
-            # Process chunk
-            result = self.engine.process_audio(chunk, is_last=is_last)
+            # Process chunk with VAD if enabled
+            if self.vad_coordinator is not None:
+                # Initialize result to avoid unbound variable errors
+                result = {'current_transcription': '', 'new_final_text': None}
+                # Process the chunk in smaller pieces for the VAD
+                vad_chunk_size = 512  # Supported chunk size for 16kHz
+                num_vad_chunks = (len(chunk) + vad_chunk_size - 1) // vad_chunk_size
+                for j in range(num_vad_chunks):
+                    start = j * vad_chunk_size
+                    end = min(start + vad_chunk_size, len(chunk))
+                    vad_chunk = chunk[start:end]
+                    
+                    # Pad the last chunk if it's smaller than the required size
+                    if len(vad_chunk) < vad_chunk_size:
+                        vad_chunk = np.pad(vad_chunk, (0, vad_chunk_size - len(vad_chunk)), 'constant')
+
+                    result = self.vad_coordinator.process_audio_chunk(vad_chunk, is_last=(is_last and j == num_vad_chunks - 1))
+                    if self.debug:
+                        vad_status = "speech" if result.get('current_transcription') or result.get('new_final_text') else "silence"
+                        print(f"{symbols['tool']} [StreamingASR] VAD processing: {vad_status}")
+            else:
+                # Process chunk directly with ASR engine
+                result = self.engine.process_audio(chunk, is_last=is_last)
             
             # Prepare output
             chunk_info = {
@@ -158,6 +205,10 @@ class StreamingASR:
                 'duration_ms': len(chunk) / 16000 * 1000,
                 'is_last': is_last
             }
+            
+            # Add VAD status to chunk info if enabled
+            if self.vad_processor is not None:
+                chunk_info['vad_status'] = "speech" if result.get('current_transcription') or result.get('new_final_text') else "silence"
             
             # Yield partial results
             if result.get('current_transcription'):
@@ -205,6 +256,7 @@ class StreamingASR:
         if self.debug:
             print(
                 f"{symbols['wave']} [StreamingASR] Starting microphone stream at {samplerate}Hz, chunk size: {chunk_size}ms ({chunk_size_samples} samples)")
+        self._ensure_engine_initialized()
         self.engine.reset_state()
         start_time = time.time()
         buffer = np.zeros((0,), dtype=np.float32)
@@ -235,13 +287,27 @@ class StreamingASR:
                     if self.debug:
                         print(
                             f"{symbols['tool']} [StreamingASR] Processing mic chunk {chunk_id} ({len(chunk)} samples)")
-                    result = self.engine.process_audio(chunk, is_last=is_last)
+                    
+                    # Process chunk with VAD if enabled
+                    if self.vad_coordinator is not None:
+                        result = self.vad_coordinator.process_audio_chunk(chunk, is_last=is_last)
+                        if self.debug:
+                            vad_status = "speech" if result.get('current_transcription') or result.get('new_final_text') else "silence"
+                            print(f"{symbols['tool']} [StreamingASR] VAD processing: {vad_status}")
+                    else:
+                        # Process chunk directly with ASR engine
+                        result = self.engine.process_audio(chunk, is_last=is_last)
+                    
                     chunk_info = {
                         'chunk_id': chunk_id,
                         'samples': len(chunk),
                         'duration_ms': len(chunk) / samplerate * 1000,
                         'is_last': is_last
                     }
+                    
+                    # Add VAD status to chunk info if enabled
+                    if self.vad_processor is not None:
+                        chunk_info['vad_status'] = "speech" if result.get('current_transcription') or result.get('new_final_text') else "silence"
                     if result.get('current_transcription'):
                         yield {
                             'partial': True,
@@ -262,6 +328,10 @@ class StreamingASR:
                     time.sleep(0.01)
         if self.debug:
             print(f"{symbols['check']} [StreamingASR] Microphone streaming complete.")
+            
+            # Add VAD statistics if enabled
+            if self.vad_processor is not None:
+                print(f"{symbols['tool']} [StreamingASR] VAD processing enabled")
     
     def _load_audio_file(self, audio_file: str) -> Optional[Dict[str, Any]]:
         """Load and prepare audio file for ASR processing."""
@@ -273,6 +343,12 @@ class StreamingASR:
         try:
             if self.debug:
                 print(f"{symbols['folder']} [StreamingASR] Loading: {audio_file}")
+
+            # Check for valid audio file format
+            if not audio_file.lower().endswith(('.wav', '.mp3', '.flac', '.ogg')):
+                if self.debug:
+                    print(f"{symbols['folder']} [StreamingASR] Invalid audio file format: {audio_file}")
+                return None
             
             # Load with torchaudio
             waveform, original_sr = torchaudio.load(audio_file)
@@ -296,6 +372,13 @@ class StreamingASR:
                 'original_sample_rate': original_sr,
                 'duration': duration
             }
+        except RuntimeError as e:
+            if "Error opening file" in str(e) or "failed to load" in str(e):
+                if self.debug:
+                    print(f"{symbols['folder']} [StreamingASR] Invalid audio file: {audio_file}")
+                return None
+            else:
+                raise e
         except Exception as e:
             if self.debug:
                 print(f"{symbols['folder']} [StreamingASR] Error loading audio file: {e}")

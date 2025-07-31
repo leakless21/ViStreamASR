@@ -62,7 +62,7 @@ device = 'cuda' if use_gpu else 'cpu'
 
 def get_cache_dir():
     """Get the ViStreamASR cache directory."""
-    cache_dir = Path.home() / ".cache" / "ViStreamASR"
+    cache_dir = Path.home() / "ViStreamASR" / "model"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
