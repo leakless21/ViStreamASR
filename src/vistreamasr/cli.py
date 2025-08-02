@@ -166,7 +166,7 @@ def transcribe_file_streaming(audio_file, chunk_size_ms=640, auto_finalize_after
     return 0
 
 
-def transcribe_microphone_streaming(duration_seconds=None, chunk_size_ms=640, auto_finalize_after=15.0, debug=False,
+def transcribe_microphone_streaming(duration_seconds=None, chunk_size_ms=640, auto_finalize_after=15.0, debug=True,
                                     use_vad=False, vad_threshold=0.5, vad_min_speech_duration_ms=250,
                                     vad_min_silence_duration_ms=100, vad_speech_pad_ms=30):
     """

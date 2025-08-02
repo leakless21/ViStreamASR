@@ -7,7 +7,7 @@ for filtering silence periods in audio streams before ASR processing.
 
 import torch
 import numpy as np
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, Generator
 import logging
 
 # Setup logging
@@ -25,8 +25,8 @@ class VADProcessor:
                  sample_rate: int = 16000,
                  threshold: float = 0.5,
                  min_speech_duration_ms: int = 250,
-                 min_silence_duration_ms: int = 100,
-                 speech_pad_ms: int = 30):
+                 min_silence_duration_ms: int = 250,
+                 speech_pad_ms: int = 50):
         """
         Initialize the VADProcessor with configuration parameters.
         
@@ -111,12 +111,15 @@ class VADProcessor:
     def process_chunk(self, audio_chunk: Union[np.ndarray, torch.Tensor]) -> Optional[torch.Tensor]:
         """
         Process an audio chunk and return speech segment if detected.
+        This method updates internal VAD state and buffers audio.
+        A speech segment is returned only upon transition from speech to silence
+        after meeting minimum duration criteria.
         
         Args:
             audio_chunk (Union[np.ndarray, torch.Tensor]): Audio chunk as numpy array or torch tensor
             
         Returns:
-            Optional[torch.Tensor]: Speech segment if detected, None otherwise
+            Optional[torch.Tensor]: Speech segment if a speech-to-silence transition occurs, None otherwise
             
         Raises:
             ValueError: If audio_chunk is invalid
@@ -135,16 +138,20 @@ class VADProcessor:
             audio_tensor = audio_tensor.squeeze()
             
         # Get speech probability
+        speech_prob = 0.0
         try:
             with torch.no_grad():
                 if self.model is not None:
                     speech_prob = getattr(self.model, '__call__')(audio_tensor, self.sample_rate).item()
                 else:
-                    speech_prob = 0.0
+                    speech_prob = 0.0 # Should not happen if model loading failed would raise error
         except Exception as e:
-            logger.warning(f"Error processing audio chunk with VAD: {e}")
-            return None
+            logger.warning(f"Error processing audio chunk with VAD model: {e}")
+            # Fallback to treat as silence or handle error as appropriate
+            speech_prob = 0.0 
             
+        # logger.info(f"VAD probability: {speech_prob}") # Removed as per instructions
+
         # Update state based on probability
         is_speech = speech_prob >= self.threshold
         
@@ -156,38 +163,31 @@ class VADProcessor:
             if self.state == "silence":
                 # Transition from silence to speech
                 self.state = "speech"
-                self.current_speech_start = len(self.buffer) * audio_tensor.shape[0] if self.buffer else 0
-                # Add current chunk to buffer
+                self.current_speech_start = len(self.buffer) * audio_tensor.shape if self.buffer else 0
                 self.buffer.append(audio_tensor)
-            else:
+            else: # self.state == "speech"
                 # Continue speech
                 self.buffer.append(audio_tensor)
-                
-                # Check if we have enough speech
-                if self.speech_counter >= self.min_speech_samples:
-                    # We have a valid speech segment, but continue buffering
-                    # until we detect silence or end of stream
-                    pass
+                # Buffer continues to grow while in speech state
                     
-        else:
+        else: # is_speech is False
             # Handle silence detection
-            self.speech_counter = 0
+            self.speech_counter = 0 # Reset speech counter if not in speech
             self.silence_counter += len(audio_tensor)
             
             if self.state == "speech":
-                # We were in speech state, check if silence is long enough
+                # We were in speech state, check if silence is long enough to finalize segment
                 if self.silence_counter >= self.min_silence_samples:
                     # End of speech segment detected
                     return self._finalize_speech_segment()
                 else:
-                    # Not enough silence yet, continue buffering
+                    # Not enough silence yet, but we were in speech. Continue buffering.
                     self.buffer.append(audio_tensor)
-            else:
-                # Continue silence
-                # For silence, we don't buffer unless we're at the end of a stream
+            else: # self.state == "silence"
+                # Continue silence, do not buffer
                 pass
                 
-        return None  # No complete speech segment yet
+        return None # No complete speech segment finalized in this call
     
     def get_speech_probability(self, audio_chunk: Union[np.ndarray, torch.Tensor]) -> float:
         """
@@ -265,7 +265,18 @@ class VADProcessor:
             Optional[torch.Tensor]: Remaining speech segment, or None if buffer is empty
         """
         if self.buffer and self.state == "speech":
-            return self._finalize_speech_segment()
+            # Check if the buffered speech meets minimum duration
+            # This check might be redundant if process_chunk already ensures it,
+            # but good for safety if flush is called independently.
+            current_buffer_samples = sum(len(chunk) for chunk in self.buffer)
+            if current_buffer_samples >= self.min_speech_samples:
+                return self._finalize_speech_segment()
+            else:
+                # If not enough speech, just reset buffer
+                self.buffer = []
+                self.state = "silence"
+                self.speech_counter = 0
+                return None
         return None
     
     def is_speech(self, audio_chunk: Union[np.ndarray, torch.Tensor]) -> bool:
@@ -288,18 +299,18 @@ class VADASRCoordinator:
     
     This class manages the interaction between VAD processing and ASR transcription,
     ensuring efficient processing of audio streams by filtering out silence periods.
+    It now acts as a gatekeeper, yielding complete speech segments.
     """
     
-    def __init__(self, vad_config: Dict[str, Any], asr_engine):
+    def __init__(self, vad_config: Dict[str, Any]): # Removed asr_engine
         """
         Initialize the VAD-ASR coordinator.
         
         Args:
             vad_config (Dict[str, Any]): Configuration parameters for VAD
-            asr_engine: ASR engine instance for processing speech segments
         """
         self.vad_config = vad_config
-        self.asr_engine = asr_engine
+        # self.asr_engine = asr_engine # Removed
         
         # Initialize VAD processor if enabled or if vad_config is provided
         self.vad_processor = None
@@ -320,49 +331,50 @@ class VADASRCoordinator:
                 logger.warning(f"Failed to initialize VAD processor: {e}. VAD will be disabled.")
                 self.vad_processor = None
     
-    def process_audio_chunk(self, audio_chunk: Union[np.ndarray, torch.Tensor], is_last: bool = False) -> Dict[str, Any]:
+    def process_audio_chunk(self, audio_chunk: Union[np.ndarray, torch.Tensor], is_last: bool = False) -> Generator[torch.Tensor, None, None]:
         """
-        Process an audio chunk with VAD filtering and ASR transcription.
-        
+        Process an audio chunk with VAD filtering.
+        Yields complete speech segments detected by VAD.
+
         Args:
             audio_chunk (Union[np.ndarray, torch.Tensor]): Audio chunk data
             is_last (bool): Flag indicating if this is the last chunk
-            
-        Returns:
-            Dict[str, Any]: Results with 'partial' and 'final' transcriptions
+
+        Yields:
+            torch.Tensor: A complete speech segment.
         """
-        # If VAD is not enabled or not available, process directly with ASR
+        print("COORDINATOR: Received chunk, size:", len(audio_chunk))
         if self.vad_processor is None:
-            return self.asr_engine.process_audio(audio_chunk, is_last=is_last)
-        
-        # Process with VAD
-        speech_segment = self.vad_processor.process_chunk(audio_chunk)
-        
-        # If we have a speech segment, process it with ASR
-        if speech_segment is not None:
-            return self.asr_engine.process_audio(speech_segment.numpy(), is_last=False)
-        
-        # If this is the last chunk, flush any remaining audio
+            # If VAD is not enabled, this coordinator should not be used.
+            # However, to prevent breaking changes if called directly,
+            # it could yield the chunk itself, or raise an error.
+            # For this refactoring, we assume StreamingASR handles the non-VAD path.
+            # If VAD coordinator is instantiated, VAD is expected to be active.
+            logger.warning("VADASRCoordinator called but VAD processor is not initialized.")
+            # Yield nothing if VAD is not properly set up.
+            return
+
+        # VAD is enabled, process the chunk to update VAD state
+        # and potentially get a finalized segment.
+        finalized_speech_segment = self.vad_processor.process_chunk(audio_chunk)
+
+        if finalized_speech_segment is not None:
+            print("COORDINATOR: VADProcessor returned segment, size:", len(finalized_speech_segment))
+            yield finalized_speech_segment
+
+        # If this is the last chunk, flush any remaining buffered audio from VADProcessor
         if is_last:
-            remaining_segment = self.vad_processor.flush()
-            if remaining_segment is not None:
-                result = self.asr_engine.process_audio(remaining_segment.numpy(), is_last=True)
-                # Reset VAD state for next session
-                self.vad_processor.reset_states()
-                return result
-        
-        # No speech detected or not enough to form a segment
-        return {
-            'current_transcription': getattr(self.asr_engine, 'current_transcription', ''),
-            'new_final_text': None
-        }
+            remaining_segment_on_flush = self.vad_processor.flush()
+            if remaining_segment_on_flush is not None:
+                yield remaining_segment_on_flush
+            # Reset VAD state for the next session
+            self.vad_processor.reset_states()
     
     def reset(self):
-        """Reset both VAD and ASR states for new audio session."""
+        """Reset VAD states for new audio session."""
         if self.vad_processor is not None:
             self.vad_processor.reset_states()
-        if self.asr_engine is not None:
-            self.asr_engine.reset_state()
+        # ASR engine reset is now handled by StreamingASR directly on the engine instance.
 
 
 # Backward compatibility

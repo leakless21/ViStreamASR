@@ -44,9 +44,9 @@
 ### 2. Compatibility
 
 - **Python Version**: Support Python 3.8+
-- **PyTorch Compatibility**: Work with PyTorch 1.12.0+
+- **PyTorch Compatibility**: Work with PyTorch 2.7.1+
 - **Torchaudio Integration**: Seamless integration with torchaudio for audio I/O
-- **ONNX Support**: Optional ONNX runtime support for alternative deployment scenarios
+- **Dependency Management**: Use Pixi for robust, multi-platform dependency management
 
 ### 3. Reliability
 
@@ -178,12 +178,47 @@
 
 ## Dependencies and Compatibility ✅ IMPLEMENTED
 
-### Required Libraries
+### Dependency Management
 
-- **silero-vad**: Pre-trained voice activity detection model
-- **torch**: PyTorch for model inference (1.12.0+)
-- **torchaudio**: Audio processing utilities
-- **numpy**: Numerical computing utilities
+The project now uses **Pixi** for dependency management, providing robust, multi-platform support with clear separation between Conda and PyPI dependencies.
+
+#### Conda Dependencies ([`tool.pixi.dependencies`](pyproject.toml:83))
+
+These dependencies are managed through Conda and are optimized for performance across different platforms.
+
+| Dependency  | Version  | Purpose                                     |
+| ----------- | -------- | ------------------------------------------- |
+| python      | >=3.8    | Core Python runtime                         |
+| librosa     | >=0.10.0 | Audio feature extraction                    |
+| numba       | >=0.59.0 | Just-in-time compilation for numerical code |
+| llvmlite    | >=0.41.0 | Low-level LLVM interface for Numba          |
+| numpy       | >=1.22.3 | Fundamental numerical computing library     |
+| requests    | >=2.32.4 | HTTP library for model downloads            |
+| sounddevice | >=0.5.2  | Audio playback and recording                |
+| pytorch     | >=2.7.1  | Deep learning framework                     |
+| torchaudio  | >=2.7.1  | Audio processing utilities for PyTorch      |
+
+#### PyPI Dependencies ([`tool.pixi.pypi-dependencies`](pyproject.toml:94))
+
+These dependencies are installed via pip and include the project itself and pure Python libraries.
+
+| Dependency      | Version                   | Purpose                                                            |
+| --------------- | ------------------------- | ------------------------------------------------------------------ |
+| vistreamasr     | {path=".", editable=true} | The ViStreamASR package itself (development/editable install)      |
+| flashlight-text | >=0.0.7                   | C++ library for fast text processing and decoding in ASR           |
+| silero-vad      | >=5.1.2                   | Pre-trained voice activity detection model (for VAD functionality) |
+
+#### Development Dependencies ([`tool.pixi.feature.dev.dependencies`](pyproject.toml:99))
+
+Development dependencies are managed as a Pixi feature, activated when using the `dev` environment.
+
+| Dependency | Version  | Purpose                    |
+| ---------- | -------- | -------------------------- |
+| black      | >=23.0.0 | Code formatter             |
+| isort      | >=5.12.0 | Import sorter              |
+| flake8     | >=6.0.0  | Code linter                |
+| pytest     | >=8.4.1  | Test runner                |
+| pytest-cov | >=4.1.0  | Coverage plugin for pytest |
 
 ### Model Loading
 

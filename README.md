@@ -22,13 +22,27 @@ ViStreamASR now features seamless integration with **Silero-VAD**, a state-of-th
 - ⚡ **High Performance**: CPU/GPU support with VAD optimization
 - 🔊 **Voice Activity Detection**: Integrated Silero-VAD for efficient audio filtering
 - 🎛️ **Configurable VAD**: Customizable VAD parameters for different use cases
+- 🌐 **Multi-Platform**: Supports Linux, macOS (Intel & ARM), and Windows
 
 ## Installation
 
-### With VAD Support (Recommended)
+### With Pixi (Recommended)
+
+The project now uses **Pixi** for dependency management, providing a robust and multi-platform environment.
 
 ```bash
-pip install ViStreamASR
+# Install Pixi
+curl -LsSf https://pixi.sh/install.sh | sh
+
+# Clone the repository
+git clone https://github.com/nguyenvulebinh/ViStreamASR.git
+cd ViStreamASR
+
+# Install dependencies
+pixi install
+
+# Activate the environment for interactive use
+pixi shell
 ```
 
 ### Development Installation
@@ -40,18 +54,14 @@ For development or to use the latest version:
 git clone https://github.com/nguyenvulebinh/ViStreamASR.git
 cd ViStreamASR
 
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies with VAD support
-pip install -r requirements.txt
+# Install dependencies
+pixi install
 
 # Install the package in development mode
-pip install -e .
+pixi run pip install -e .
 ```
 
-### Using UV (Recommended)
+### Using UV (Alternative)
 
 ```bash
 # Install UV package manager
@@ -301,14 +311,17 @@ The following picture shows how U2 (Unified Streaming and Non-streaming) archite
 
 ### Software Requirements
 
+- **Pixi**: For dependency management and environment setup
 - Python 3.8+
-- PyTorch 2.5+
-- TorchAudio 2.5+
-- NumPy 1.19.0+
-- Requests 2.25.0+
-- flashlight-text
-- librosa
-- **silero-vad>=5.1.2** (for VAD functionality)
+- PyTorch 2.7.1+
+- TorchAudio 2.7.1+
+- NumPy 1.22.3+
+- Requests 2.32.4+
+- librosa 0.10.0+
+- numba 0.59.0+
+- sounddevice 0.5.2+
+- flashlight-text >=0.0.7
+- silero-vad >=5.1.2
 
 ## CLI Commands
 
@@ -383,8 +396,8 @@ ViStreamASR/
 ├── scripts/
 ├── model/                     # Cached models
 ├── resource/                  # Audio samples and resources
-├── pyproject.toml             # Project configuration
-├── requirements.txt           # Dependencies
+├── pyproject.toml             # Project configuration (Pixi)
+├── requirements.txt           # Legacy dependencies
 └── README.md                  # This file
 ```
 
@@ -392,47 +405,56 @@ ViStreamASR/
 
 ### Setting Up Development Environment
 
+The project uses Pixi for dependency management, which simplifies setting up a consistent development environment.
+
 ```bash
 # Clone the repository
 git clone https://github.com/nguyenvulebinh/ViStreamASR.git
 cd ViStreamASR
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Install dependencies
+pixi install
 
-# Install development dependencies
-pip install -r requirements.txt
+# Activate the development environment
+pixi shell
+
+# Install the package in development mode
 pip install -e .
-
-# Install development tools
-pip install pytest pytest-cov black isort flake8
 ```
 
 ### Running Tests
 
 ```bash
 # Run all tests
-pytest
+pixi run test
 
 # Run VAD-specific tests
-pytest tests/test_vad_integration.py
+pixi run pytest tests/test_vad_integration.py
 
 # Run with coverage
-pytest --cov=vistreamasr --cov-report=html
+pixi run pytest --cov=vistreamasr --cov-report=html
 ```
 
-### Code Style
+### Code Style and Linting
 
 ```bash
 # Format code
-black src/ tests/
+pixi run format
 
-# Sort imports
-isort src/ tests/
+# Check formatting (lint)
+pixi run lint
 
-# Lint code
-flake8 src/ tests/
+# Run specific tools
+pixi run black src/ tests/
+pixi run isort src/ tests/
+pixi run flake8 src/ tests/
+```
+
+### Building the Package
+
+```bash
+# Build the package
+pixi run build
 ```
 
 ## Contributing
@@ -501,6 +523,14 @@ vad_config = {'enabled': True, 'speech_pad_ms': 50}
 - Ensure adequate RAM for both ASR and VAD models
 - Monitor memory usage during long streaming sessions
 
+### Pixi Environment Issues
+
+**If you encounter Pixi-related issues:**
+
+- Ensure Pixi is installed correctly: `pixi --version`
+- Update Pixi: `curl -LsSf https://pixi.sh/install.sh | sh`
+- Clean the Pixi environment: `pixi install --clean`
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -510,6 +540,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Silero-VAD**: For the excellent voice activity detection model
 - **U2 ASR**: For the underlying streaming ASR architecture
 - **Vietnamese ASR Community**: For valuable feedback and testing
+- **Pixi Project**: For the excellent dependency management and environment tooling
 
 ## Links and Documentation
 
@@ -520,6 +551,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [🛠️ Development Guide](docs/PROJECT_GUIDE.md)
 - [📚 Original U2 Paper](https://arxiv.org/abs/2203.15455)
 - [🎙️ Silero-VAD Documentation](https://github.com/snakers4/silero-vad)
+- [🌐 Pixi Documentation](https://pixi.sh/)
 
 ---
 

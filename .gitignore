@@ -211,4 +211,6 @@ Thumbs.db
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db 
+Thumbs.db # pixi environments
+.pixi/*
+!.pixi/config.toml

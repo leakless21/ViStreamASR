@@ -297,16 +297,39 @@ class StreamingASR:
 ### 10.1 System Requirements
 
 - **Python 3.8+**: Runtime environment requirement
-- **PyTorch 1.12.0+**: Deep learning framework dependency
+- **Pixi Environment**: Dependency management and execution environment
+- **PyTorch 2.7.1+**: Deep learning framework dependency
 - **CPU Support**: AVX/AVX2/AVX-512 for optimal performance
 - **Memory**: Minimum 4GB RAM for smooth operation
 
 ### 10.2 Deployment Scenarios
 
-- **Development Environment**: Full debug logging and testing
+- **Development Environment**: Full debug logging and testing using `pixi run`
 - **Production Environment**: Optimized performance with minimal logging
 - **Edge Deployment**: Lightweight configuration for resource-constrained environments
 - **Cloud Deployment**: Scalable multi-instance processing
+
+### 10.3 Dependency Management
+
+The project now uses **Pixi** for dependency management, providing robust, multi-platform support.
+
+#### Pixi Environment Setup
+
+- **Installation**: Install Pixi via `curl -LsSf https://pixi.sh/install.sh | sh`
+- **Project Installation**: Use `pixi install` to set up the environment
+- **Dependency Resolution**: Automatic resolution of Conda and PyPI dependencies
+- **Environment Management**: Isolated environments for different project needs
+
+#### Pixi Features
+
+- **Multi-platform Support**: Defined in [`tool.pixi.workspace.platforms`](pyproject.toml:81), supporting `linux-64`, `osx-64`, `osx-arm64`, and `win-64`.
+- **Tasks**: Common tasks like `test`, `lint`, `format`, and `build` are defined in [`tool.pixi.tasks`](pyproject.toml:110) and can be run with `pixi run <task>`.
+- **Development Environment**: Activate the development environment with `pixi run --dev <command>` or use `pix shell` for an interactive shell.
+
+#### Environments
+
+- **Default Environment**: Standard execution environment with core dependencies.
+- **Development Environment**: Activated via `pixi run -e dev <command>`, includes development dependencies from the `dev` feature.
 
 ## 11. Future Enhancements 🔄 PLANNED
 
