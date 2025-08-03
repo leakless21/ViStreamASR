@@ -1,8 +1,24 @@
-# Silero-VAD Integration Requirements
+# ViStreamASR Configuration and Logging System Requirements
 
 ## Functional Requirements
 
-### 1. Core VAD Functionality ✅ IMPLEMENTED
+### 1. Configuration Management System ✅ IMPLEMENTED
+
+- **Hierarchical Configuration**: Support for TOML configuration files, environment variables, and CLI arguments
+- **Pydantic Integration**: Use pydantic-settings for type-safe configuration with validation
+- **Nested Configuration**: Organize settings into logical groups (model, VAD, logging)
+- **Environment Variable Support**: Automatic mapping of environment variables to configuration
+- **CLI Override**: Ability to override any configuration parameter via command-line arguments
+
+### 2. Logging System ✅ IMPLEMENTED
+
+- **Loguru Integration**: Use Loguru for structured logging with color support
+- **Multiple Sinks**: Support for console and file output with different formats
+- **Log Rotation**: Automatic log file rotation to manage disk space
+- **Symbol-based Logging**: Maintain compatibility with existing UI elements using symbols
+- **Performance Logging**: Include timing and performance metrics in logs
+
+### 3. Core VAD Functionality ✅ IMPLEMENTED
 
 - **Voice Activity Detection**: Detect speech segments in audio streams with high accuracy
 - **Real-time Processing**: Process audio chunks in real-time as they are received
@@ -10,7 +26,7 @@
 - **Confidence Scoring**: Provide confidence scores for speech detection decisions
 - **Streaming Interface**: Support for continuous audio stream processing
 
-### 2. Integration with ViStreamASR ✅ IMPLEMENTED
+### 4. Integration with ViStreamASR ✅ IMPLEMENTED
 
 - **Audio Preprocessing**: Process audio chunks before sending to ASR engine
 - **Speech Filtering**: Only forward audio segments classified as speech to the ASR engine
@@ -18,14 +34,14 @@
 - **Buffer Management**: Properly manage audio buffers to prevent data loss
 - **State Management**: Maintain VAD state between audio chunks for accurate detection
 
-### 3. Vietnamese Language Support ✅ IMPLEMENTED
+### 5. Vietnamese Language Support ✅ IMPLEMENTED
 
 - **Tone Handling**: Proper detection of Vietnamese tonal characteristics
 - **Dialect Support**: Handle regional dialect variations in Vietnamese speech
 - **Noise Robustness**: Maintain accuracy in various noise conditions typical in Vietnamese environments
 - **Language Agnostic**: Leverage Silero-VAD's multilingual capabilities for Vietnamese
 
-### 4. Performance Requirements ✅ IMPLEMENTED
+### 6. Performance Requirements ✅ IMPLEMENTED
 
 - **Low Latency**: Minimal processing delay to maintain real-time performance
 - **CPU Efficiency**: Optimize for single-threaded CPU performance as per Silero-VAD design
@@ -34,33 +50,51 @@
 
 ## Non-Functional Requirements
 
-### 1. Performance Metrics
+### 1. Configuration System Performance
+
+- **Loading Time**: Configuration files should load in <10ms
+- **Validation Time**: Parameter validation should complete in <5ms
+- **Memory Footprint**: Configuration objects should use <1MB of memory
+- **Access Speed**: Configuration parameter access should be O(1) complexity
+
+### 2. Logging System Performance
+
+- **Log Throughput**: Support for >1000 log messages per second without performance impact
+- **File I/O**: Asynchronous file writing to prevent blocking of main processing
+- **Memory Usage**: Log buffers should use <5MB of memory under normal operation
+- **Rotation Speed**: Log rotation should complete in <100ms
+
+### 3. Performance Metrics
 
 - **Processing Time**: Each 30ms+ audio chunk should be processed in <1ms on a single CPU thread
 - **Accuracy**: High accuracy on Vietnamese speech datasets with minimal false positives/negatives
 - **RTF (Real-Time Factor)**: Maintain RTF < 0.1 for real-time streaming applications
 - **Memory Footprint**: Model size should remain under 5MB for efficient deployment
 
-### 2. Compatibility
+### 4. Compatibility
 
 - **Python Version**: Support Python 3.8+
 - **PyTorch Compatibility**: Work with PyTorch 2.7.1+
 - **Torchaudio Integration**: Seamless integration with torchaudio for audio I/O
 - **Dependency Management**: Use Pixi for robust, multi-platform dependency management
+- **TOML Support**: Support for TOML configuration file format
+- **Loguru**: Integration with Loguru logging framework
 
-### 3. Reliability
+### 5. Reliability
 
 - **Error Handling**: Graceful handling of audio format mismatches and processing errors
 - **Recovery**: Ability to recover from transient errors without complete system restart
-- **Logging**: Comprehensive logging for debugging and monitoring
+- **Logging**: Comprehensive logging for debugging and monitoring with structured output
 - **Validation**: Input validation for audio data and parameters
+- **Configuration Validation**: Automatic validation of configuration parameters with clear error messages
 
-### 4. Maintainability
+### 6. Maintainability
 
-- **Modular Design**: Clean separation between VAD processing and ASR integration
-- **Configuration**: External configuration for VAD parameters (thresholds, durations)
-- **Testing**: Comprehensive unit tests for VAD integration components
+- **Modular Design**: Clean separation between configuration, logging, VAD processing and ASR integration
+- **Configuration**: External configuration for all system parameters (model, VAD, logging)
+- **Testing**: Comprehensive unit tests for all components including configuration and logging
 - **Documentation**: Clear API documentation and usage examples
+- **Type Safety**: Use of Pydantic for type-safe configuration management
 
 ### 5. Security
 
@@ -155,26 +189,51 @@
 
 ## Configuration Parameters ✅ IMPLEMENTED
 
+### Model Configuration
+
+| Parameter             | Default | Range         | Description                                      |
+| --------------------- | ------- | ------------- | ------------------------------------------------ |
+| `chunk_size_ms`       | 640     | [100, 2000]   | Audio chunk duration in milliseconds             |
+| `auto_finalize_after` | 15.0    | [1.0, 60.0]   | Maximum duration before auto-finalizing segments |
+| `debug`               | False   | [True, False] | Enable debug logging                             |
+
 ### VAD Configuration
 
 | Parameter                 | Default | Range         | Description                    |
 | ------------------------- | ------- | ------------- | ------------------------------ |
+| `enabled`                 | False   | [True, False] | Enable/disable VAD processing  |
 | `sample_rate`             | 16000   | [8000, 16000] | Audio sample rate              |
 | `threshold`               | 0.5     | [0.0, 1.0]    | Speech probability threshold   |
 | `min_speech_duration_ms`  | 250     | >0            | Minimum speech duration        |
-| `min_silence_duration_ms` | 250     | >0            | Minimum silence duration       |
-| `speech_pad_ms`           | 50      | ≥0            | Padding around speech segments |
-| `enabled`                 | False   | [True, False] | Enable/disable VAD processing  |
+| `min_silence_duration_ms` | 100     | >0            | Minimum silence duration       |
+| `speech_pad_ms`           | 30      | ≥0            | Padding around speech segments |
+
+### Logging Configuration
+
+| Parameter         | Default                         | Range                                 | Description               |
+| ----------------- | ------------------------------- | ------------------------------------- | ------------------------- | ------------------------- | --- | ------------------------------ |
+| `level`           | "INFO"                          | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level         |
+| `format`          | "{time:YYYY-MM-DD HH:mm:ss}     | {level}                               | {name}                    | {message}"                | -   | Log message format             |
+| `file_enabled`    | True                            | [True, False]                         | Enable file logging       |
+| `file_path`       | "vistreamasr.log"               | -                                     | Log file path             |
+| `rotation`        | "10 MB"                         | -                                     | Log file rotation size    |
+| `retention`       | "7 days"                        | -                                     | Log file retention period |
+| `console_enabled` | True                            | [True, False]                         | Enable console logging    |
+| `console_format`  | "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level>            | <cyan>{name}</cyan>       | <level>{message}</level>" | -   | Console log format with colors |
 
 ### CLI Parameters
 
-| Parameter                       | Default | Description                              |
-| ------------------------------- | ------- | ---------------------------------------- |
-| `--use-vad`                     | False   | Enable Voice Activity Detection          |
-| `--vad-threshold`               | 0.5     | VAD speech probability threshold         |
-| `--vad-min-speech-duration-ms`  | 250     | Minimum speech duration in milliseconds  |
-| `--vad-min-silence-duration-ms` | 100     | Minimum silence duration in milliseconds |
-| `--vad-speech-pad-ms`           | 30      | Padding added to speech segments         |
+| Parameter                       | Default | Description                                                |
+| ------------------------------- | ------- | ---------------------------------------------------------- |
+| `--config`                      | None    | Path to configuration file                                 |
+| `--chunk-size`                  | 640     | Chunk size in milliseconds (100-2000ms)                    |
+| `--auto-finalize-after`         | 15.0    | Maximum duration before auto-finalizing segments (seconds) |
+| `--show-debug`                  | False   | Enable debug logging with detailed processing information  |
+| `--use-vad`                     | False   | Enable Voice Activity Detection                            |
+| `--vad-threshold`               | 0.5     | VAD speech probability threshold                           |
+| `--vad-min-speech-duration-ms`  | 250     | Minimum speech duration in milliseconds                    |
+| `--vad-min-silence-duration-ms` | 100     | Minimum silence duration in milliseconds                   |
+| `--vad-speech-pad-ms`           | 30      | Padding added to speech segments                           |
 
 ## Dependencies and Compatibility ✅ IMPLEMENTED
 
@@ -251,30 +310,76 @@ Development dependencies are managed as a Pixi feature, activated when using the
 
 ## Usage Examples ✅ IMPLEMENTED
 
-### Basic VAD Usage
+### Configuration File Usage
 
-```python
-# Initialize with default parameters
-vad_config = {'enabled': True}
-asr = StreamingASR(vad_config=vad_config)
+```toml
+# vistreamasr.toml
+[model]
+chunk_size_ms = 640
+auto_finalize_after = 15.0
+debug = false
 
-# Custom VAD parameters
-vad_config = {
-   'enabled': True,
-   'threshold': 0.5,
-   'min_speech_duration_ms': 250,
-   'min_silence_duration_ms': 100,
-   'speech_pad_ms': 30
-}
+[vad]
+enabled = true
+sample_rate = 16000
+threshold = 0.5
+min_speech_duration_ms = 250
+min_silence_duration_ms = 100
+speech_pad_ms = 30
+
+[logging]
+level = "INFO"
+file_enabled = true
+file_path = "vistreamasr.log"
+rotation = "10 MB"
+retention = "7 days"
+console_enabled = true
 ```
 
-### CLI Usage
+### Programmatic Usage
+
+```python
+from vistreamasr import ViStreamASRSettings, setup_logging, StreamingASR
+
+# Load configuration from file
+settings = ViStreamASRSettings()
+
+# Initialize logging
+setup_logging(settings.logging)
+
+# Initialize ASR with configuration
+asr = StreamingASR(settings=settings)
+
+# Process audio file
+for result in asr.stream_from_file("audio.wav"):
+    if result['final']:
+        print(f"Final: {result['text']}")
+```
+
+### Environment Variable Usage
 
 ```bash
-# Enable VAD for file transcription
-vistream-asr transcribe audio.wav --use-vad
+# Set configuration via environment variables
+export VISTREAMASR_MODEL__CHUNK_SIZE_MS=500
+export VISTREAMASR_MODEL__DEBUG=true
+export VISTREAMASR_VAD__ENABLED=true
+export VISTREAMASR_VAD__THRESHOLD=0.7
+export VISTREAMASR_LOGGING__LEVEL=DEBUG
 
-# Custom VAD parameters
+# Run with environment configuration
+vistream-asr transcribe audio.wav
+```
+
+### CLI Usage with Configuration
+
+```bash
+# Use custom configuration file
+vistream-asr transcribe audio.wav --config custom_config.toml
+
+# Override configuration parameters
+vistream-asr transcribe audio.wav --chunk-size 500 --show-debug --use-vad
+
+# Enable VAD with custom parameters
 vistream-asr transcribe audio.wav --use-vad --vad-threshold 0.7 --vad-min-speech-duration-ms 200
 
 # Enable VAD for microphone processing

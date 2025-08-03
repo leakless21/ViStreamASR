@@ -8,10 +8,7 @@ for filtering silence periods in audio streams before ASR processing.
 import torch
 import numpy as np
 from typing import Optional, Dict, Any, Union, Generator
-import logging
-
-# Setup logging
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class VADProcessor:
     """
@@ -25,8 +22,8 @@ class VADProcessor:
                  sample_rate: int = 16000,
                  threshold: float = 0.5,
                  min_speech_duration_ms: int = 250,
-                 min_silence_duration_ms: int = 250,
-                 speech_pad_ms: int = 50):
+                 min_silence_duration_ms: int = 100,
+                 speech_pad_ms: int = 30):
         """
         Initialize the VADProcessor with configuration parameters.
         
@@ -77,7 +74,7 @@ class VADProcessor:
             try:
                 from silero_vad import load_silero_vad
                 self.model = load_silero_vad()
-                logger.info("Silero-VAD model loaded successfully using pip package")
+                logger.debug("Silero-VAD model loaded successfully using pip package")
             except ImportError:
                 # Fallback to torch.hub
                 self.model = torch.hub.load(
@@ -86,7 +83,7 @@ class VADProcessor:
                     force_reload=False,
                     onnx=False
                 )
-                logger.info("Silero-VAD model loaded successfully using torch.hub")
+                logger.debug("Silero-VAD model loaded successfully using torch.hub")
                 
         except Exception as e:
             logger.error(f"Failed to load Silero-VAD model: {e}")
@@ -323,7 +320,7 @@ class VADASRCoordinator:
                     min_silence_duration_ms=vad_config.get('min_silence_duration_ms', 100),
                     speech_pad_ms=vad_config.get('speech_pad_ms', 30)
                 )
-                logger.info("VAD processor initialized successfully")
+                logger.debug("VAD processor initialized successfully")
             except ValueError as e:
                 logger.warning(f"Invalid VAD configuration: {e}. VAD will be disabled.")
                 self.vad_processor = None
@@ -343,7 +340,6 @@ class VADASRCoordinator:
         Yields:
             torch.Tensor: A complete speech segment.
         """
-        print("COORDINATOR: Received chunk, size:", len(audio_chunk))
         if self.vad_processor is None:
             # If VAD is not enabled, this coordinator should not be used.
             # However, to prevent breaking changes if called directly,
@@ -359,7 +355,6 @@ class VADASRCoordinator:
         finalized_speech_segment = self.vad_processor.process_chunk(audio_chunk)
 
         if finalized_speech_segment is not None:
-            print("COORDINATOR: VADProcessor returned segment, size:", len(finalized_speech_segment))
             yield finalized_speech_segment
 
         # If this is the last chunk, flush any remaining buffered audio from VADProcessor

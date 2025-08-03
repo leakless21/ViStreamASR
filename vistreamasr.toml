@@ -1,0 +1,74 @@
+# ViStreamASR Configuration File
+# This file contains default settings for the ViStreamASR library
+# Settings can be overridden by environment variables or CLI arguments
+
+[model]
+# Audio chunk size in milliseconds for streaming processing
+# Range: 100-2000ms, default: 640ms
+chunk_size_ms = 640
+
+# Maximum duration in seconds before auto-finalizing a segment
+# Range: 0.5-60.0s, default: 15.0s
+auto_finalize_after = 15.0
+
+# Enable debug mode for detailed processing information
+# Options: true/false, default: false
+debug = false
+
+[vad]
+# Enable voice activity detection to filter silence periods
+# Options: true/false, default: false
+enabled = true
+
+# Speech probability threshold for VAD (0.0-1.0)
+# Higher values require more confidence to detect speech
+# Range: 0.0-1.0, default: 0.5
+threshold = 0.5
+
+# Minimum speech duration in milliseconds
+# Speech segments shorter than this will be ignored
+# Range: >100ms, default: 250ms
+min_speech_duration_ms = 250
+
+# Minimum silence duration in milliseconds
+# Silence periods shorter than this won't end speech segments
+# Range: >50ms, default: 500ms
+min_silence_duration_ms = 500
+
+# Padding added to speech segments in milliseconds
+# Helps ensure complete speech capture
+# Range: >0ms, default: 30ms
+speech_pad_ms = 30
+
+# Audio sample rate for VAD processing
+# Options: 8000/16000, default: 16000
+sample_rate = 16000
+
+[logging]
+# Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+# Controls the verbosity of log messages
+# Options: DEBUG/INFO/WARNING/ERROR/CRITICAL, default: INFO
+level = "INFO"
+
+# Path to log file (optional)
+# If not specified, logs only go to console
+# Example: "logs/vistreamasr.log"
+# Default: "" (console only)
+file_path = ""
+
+# Log format string with color support
+# Available tags: <green>, <level>, <cyan>, <red>, <yellow>, <blue>, <magenta>
+# Variables: {time}, {level}, {name}, {function}, {line}, {message}
+format = "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+
+# Log rotation size
+# Rotates log files when they reach this size
+# Examples: "10 MB", "1 GB", "500 KB"
+# Default: "10 MB"
+rotation = "10 MB"
+
+# Log retention period
+# Deletes old log files after this period
+# Examples: "7 days", "1 month", "1 year"
+# Default: "7 days"
+retention = "7 days"

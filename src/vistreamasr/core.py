@@ -25,17 +25,11 @@ import tempfile
 import requests
 from pathlib import Path
 
-# Fix encoding issues on Windows
-if sys.platform.startswith('win'):
-    import io
-    if hasattr(sys.stdout, 'reconfigure'):
-        try:
-            sys.stdout.reconfigure(encoding='utf-8')
-        except:
-            pass
-    else:
-        # Fallback for older Python versions
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+# Import logging
+from .logging import log_with_symbol, get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 # Define symbols that work across platforms
 symbols = {
@@ -116,14 +110,14 @@ def load_models(debug_mode=False):
     model_url = "https://huggingface.co/nguyenvulebinh/ViStreamASR/resolve/main/pytorch_model.bin"
     
     if debug_mode:
-        print(f"{symbols['tool']} [ENGINE] Cache directory: {cache_dir}")
-        print(f"{symbols['tool']} [ENGINE] Model path: {model_path}")
+        logger.debug(f"[ENGINE] Cache directory: {cache_dir}")
+        logger.debug(f"[ENGINE] Model path: {model_path}")
     
     # Check if model exists in cache, if not download it
     if not model_path.exists():
         if debug_mode:
-            print(f"{symbols['download']} [ENGINE] Model not found in cache, downloading...")
-            print(f"{symbols['download']} [ENGINE] URL: {model_url}")
+            logger.debug("[ENGINE] Model not found in cache, downloading...")
+            logger.debug(f"[ENGINE] URL: {model_url}")
         
         try:
             # Download the model with progress indication
@@ -133,7 +127,7 @@ def load_models(debug_mode=False):
             total_size = int(response.headers.get('content-length', 0))
             downloaded_size = 0
             
-            print(f"{symbols['download']} Downloading ViStreamASR model to cache...")
+            log_with_symbol(symbols['download'], "Downloading ViStreamASR model to cache...")
             with open(model_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
@@ -151,13 +145,13 @@ def load_models(debug_mode=False):
             raise RuntimeError(f"Error downloading model: {e}")
     else:
         if debug_mode:
-            print(f"{symbols['check']} [ENGINE] Model found in cache")
+            logger.debug("[ENGINE] Model found in cache")
     
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")
     
     if debug_mode:
-        print(f"{symbols['loading']} [ENGINE] Loading acoustic model from cache...")
+        logger.debug("[ENGINE] Loading acoustic model from cache...")
     
     with tarfile.open(model_path, 'r') as tar:
         # Load acoustic model
@@ -179,16 +173,16 @@ def load_models(debug_mode=False):
             if use_gpu:
                 model = model.cuda()
                 if debug_mode:
-                    print(f"{symbols['rocket']} [ENGINE] Model loaded on GPU")
+                    log_with_symbol(symbols['rocket'], "[ENGINE] Model loaded on GPU")
             else:
                 if debug_mode:
-                    print(f"{symbols['tool']} [ENGINE] Model loaded on CPU")
+                    log_with_symbol(symbols['tool'], "[ENGINE] Model loaded on CPU")
                 
         except KeyError as e:
             raise FileNotFoundError(f"Acoustic model not found in model file: {e}")
     
     if debug_mode:
-        print(f"{symbols['loading']} [ENGINE] Loading language models from cache...")
+        logger.debug("[ENGINE] Loading language models from cache...")
     
     with tarfile.open(model_path, 'r') as tar:
         # Extract text files to temporary files for the decoder
@@ -270,11 +264,17 @@ def load_models(debug_mode=False):
                 pass
     
     if debug_mode:
-        print(f"{symbols['check']} [ENGINE] Models loaded successfully from cache!")
+        log_with_symbol(symbols['check'], "[ENGINE] Models loaded successfully from cache!")
     
     return model, ngram_beam_search_decoder, beam_search_decoder
 
 def ngram_beam_search(ngram_beam_search_decoder, emission):
+    """Perform n-gram beam search decoding."""
+    ngram_beam_search_result = ngram_beam_search_decoder(emission.cpu())
+    decoder_output_tokens = []
+    decoder_output_transcript = []
+    decoder_ngram_best_transcipts = []
+    
     """Perform n-gram beam search decoding."""
     ngram_beam_search_result = ngram_beam_search_decoder(emission.cpu())
     decoder_output_tokens = []
