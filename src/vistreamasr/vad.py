@@ -9,6 +9,7 @@ import torch
 import numpy as np
 from typing import Optional, Dict, Any, Union, Generator
 from loguru import logger
+from .config import VADConfig # Import VADConfig
 
 class VADProcessor:
     """
@@ -22,8 +23,8 @@ class VADProcessor:
                  sample_rate: int = 16000,
                  threshold: float = 0.5,
                  min_speech_duration_ms: int = 250,
-                 min_silence_duration_ms: int = 100,
-                 speech_pad_ms: int = 30):
+                 min_silence_duration_ms: int = 100, # This local default will be overridden by VADASRCoordinator
+                 speech_pad_ms: int = 30): # This local default will be overridden by VADASRCoordinator
         """
         Initialize the VADProcessor with configuration parameters.
         
@@ -312,13 +313,15 @@ class VADASRCoordinator:
         # Initialize VAD processor if enabled or if vad_config is provided
         self.vad_processor = None
         if vad_config and (vad_config.get('enabled', False) or len(vad_config) > 0):
+            # Get default values from VADConfig
+            default_vad_config = VADConfig().model_dump()
             try:
                 self.vad_processor = VADProcessor(
-                    sample_rate=vad_config.get('sample_rate', 16000),
-                    threshold=vad_config.get('threshold', 0.5),
-                    min_speech_duration_ms=vad_config.get('min_speech_duration_ms', 250),
-                    min_silence_duration_ms=vad_config.get('min_silence_duration_ms', 100),
-                    speech_pad_ms=vad_config.get('speech_pad_ms', 30)
+                    sample_rate=vad_config.get('sample_rate', default_vad_config['sample_rate']),
+                    threshold=vad_config.get('threshold', default_vad_config.get('threshold', 0.5)), # threshold not in VADConfig, use local default
+                    min_speech_duration_ms=vad_config.get('min_speech_duration_ms', default_vad_config.get('min_speech_duration_ms', 250)), # not in VADConfig, use local default
+                    min_silence_duration_ms=vad_config.get('min_silence_duration_ms', default_vad_config['min_silence_duration_ms']),
+                    speech_pad_ms=vad_config.get('speech_pad_ms', default_vad_config['speech_pad_ms'])
                 )
                 logger.debug("VAD processor initialized successfully")
             except ValueError as e:

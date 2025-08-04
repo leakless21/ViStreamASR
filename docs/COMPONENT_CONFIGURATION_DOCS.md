@@ -12,10 +12,10 @@ The Configuration System Component provides a robust, type-safe configuration ma
 
 | Class                 | Location                                                       | Primary Responsibility   | Key Features                                                    |
 | --------------------- | -------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------- |
-| `ViStreamASRSettings` | [`src/vistreamasr/config.py:15`](src/vistreamasr/config.py:15) | Main configuration class | Hierarchical settings, validation, environment variable mapping |
-| `ModelConfig`         | [`src/vistreamasr/config.py:30`](src/vistreamasr/config.py:30) | ASR model configuration  | Chunk size, auto-finalization, debug settings                   |
-| `VADConfig`           | [`src/vistreamasr/config.py:44`](src/vistreamasr/config.py:44) | VAD configuration        | Enable/disable, thresholds, duration parameters                 |
-| `LoggingConfig`       | [`src/vistreamasr/config.py:61`](src/vistreamasr/config.py:61) | Logging configuration    | Log levels, outputs, rotation policies                          |
+| `ViStreamASRSettings` | [`src/vistreamasr/config.py:151`](src/vistreamasr/config.py:151) | Main configuration class | Hierarchical settings, validation, environment variable mapping |
+| `ModelConfig`         | [`src/vistreamasr/config.py:18`](src/vistreamasr/config.py:18) | ASR model configuration  | Chunk size, auto-finalization, debug settings                   |
+| `VADConfig`           | [`src/vistreamasr/config.py:48`](src/vistreamasr/config.py:48) | VAD configuration        | Enable/disable, thresholds, duration parameters                 |
+| `LoggingConfig`       | [`src/vistreamasr/config.py:81`](src/vistreamasr/config.py:81) | Logging configuration    | Log levels, outputs, rotation policies                          |
 
 ## 1. Configuration System Design
 
@@ -33,29 +33,30 @@ class ViStreamASRSettings(BaseSettings):
 
 class ModelConfig(BaseModel):
     """ASR model configuration."""
+    name: str = "whisper"
     chunk_size_ms: int = 640
+    stride_ms: int = 320
     auto_finalize_after: float = 15.0
-    debug: bool = False
 
 class VADConfig(BaseModel):
     """Voice Activity Detection configuration."""
-    enabled: bool = False
+    enabled: bool = True
+    aggressiveness: int = 3
+    frame_size_ms: int = 30
+    min_silence_duration_ms: int = 500
+    speech_pad_ms: int = 100
     sample_rate: int = 16000
-    threshold: float = 0.5
-    min_speech_duration_ms: int = 250
-    min_silence_duration_ms: int = 100
-    speech_pad_ms: int = 30
 
 class LoggingConfig(BaseModel):
     """Logging system configuration."""
-    level: str = "INFO"
-    format: str = "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name} | {message}"
-    file_enabled: bool = True
-    file_path: str = "vistreamasr.log"
-    rotation: str = "10 MB"
-    retention: str = "7 days"
-    console_enabled: bool = True
-    console_format: str = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan> | <level>{message}</level>"
+    file_log_level: str = "INFO"
+    console_log_level: str = "INFO"
+    rotation: Optional[str] = None
+    retention: Optional[str] = None
+    file_path: Optional[str] = None
+    format_string: str = "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"
+    enable_colors: bool = True
+    log_to_json: bool = False
 ```
 
 ### 1.2 Configuration Loading Priority
@@ -85,10 +86,9 @@ Environment variables are automatically mapped to configuration parameters:
 ```python
 # Environment variable examples:
 VISTREAMASR_MODEL__CHUNK_SIZE_MS=500
-VISTREAMASR_MODEL__DEBUG=true
 VISTREAMASR_VAD__ENABLED=true
-VISTREAMASR_VAD__THRESHOLD=0.7
-VISTREAMASR_LOGGING__LEVEL=DEBUG
+VISTREAMASR_VAD__AGGRESSIVENESS=2
+VISTREAMASR_LOGGING__CONSOLE_LOG_LEVEL=DEBUG
 ```
 
 **Mapping Rules:**
@@ -108,27 +108,28 @@ The system uses TOML format for configuration files:
 # vistreamasr.toml
 
 [model]
+name = "whisper"
 chunk_size_ms = 640
+stride_ms = 320
 auto_finalize_after = 15.0
-debug = false
 
 [vad]
 enabled = true
+aggressiveness = 3
+frame_size_ms = 30
+min_silence_duration_ms = 500
+speech_pad_ms = 100
 sample_rate = 16000
-threshold = 0.5
-min_speech_duration_ms = 250
-min_silence_duration_ms = 100
-speech_pad_ms = 30
 
 [logging]
-level = "INFO"
-format = "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name} | {message}"
-file_enabled = true
-file_path = "vistreamasr.log"
+file_log_level = "INFO"
+console_log_level = "INFO"
 rotation = "10 MB"
 retention = "7 days"
-console_enabled = true
-console_format = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan> | <level>{message}</level>"
+file_path = "vistreamasr.log"
+format_string = "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"
+enable_colors = true
+log_to_json = false
 ```
 
 ### 2.2 Configuration Sections
@@ -137,53 +138,50 @@ console_format = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | 
 
 | Parameter             | Type  | Default | Range         | Description                                      |
 | --------------------- | ----- | ------- | ------------- | ------------------------------------------------ |
-| `chunk_size_ms`       | int   | 640     | [100, 2000]   | Audio chunk duration in milliseconds             |
-| `auto_finalize_after` | float | 15.0    | [1.0, 60.0]   | Maximum duration before auto-finalizing segments |
-| `debug`               | bool  | false   | [true, false] | Enable debug logging                             |
+| `name`       | str   | "whisper"     | -   | Name of the ASR model to use             |
+| `chunk_size_ms`       | int   | 640     | >0   | Audio chunk duration in milliseconds             |
+| `stride_ms`       | int   | 320     | >0   | Stride in milliseconds between chunks             |
+| `auto_finalize_after` | float | 15.0    | [0.5, 60.0]   | Maximum duration before auto-finalizing segments |
 
 #### VAD Configuration
 
 | Parameter                 | Type  | Default | Range         | Description                    |
 | ------------------------- | ----- | ------- | ------------- | ------------------------------ |
-| `enabled`                 | bool  | false   | [true, false] | Enable/disable VAD processing  |
-| `sample_rate`             | int   | 16000   | [8000, 16000] | Audio sample rate              |
-| `threshold`               | float | 0.5     | [0.0, 1.0]    | Speech probability threshold   |
-| `min_speech_duration_ms`  | int   | 250     | >0            | Minimum speech duration        |
-| `min_silence_duration_ms` | int   | 100     | >0            | Minimum silence duration       |
-| `speech_pad_ms`           | int   | 30      | ≥0            | Padding around speech segments |
+| `enabled`                 | bool  | true   | [true, false] | Enable/disable VAD processing  |
+| `aggressiveness`             | int   | 3   | [0, 3] | VAD aggressiveness level (0-3, 3 being most aggressive)              |
+| `frame_size_ms`               | int | 30     | >0    | Frame size in milliseconds for VAD processing   |
+| `min_silence_duration_ms` | int   | 500     | >0            | Minimum silence duration       |
+| `speech_pad_ms`           | int   | 100      | >0            | Padding around speech segments |
+| `sample_rate`           | int   | 16000      | -            | Audio sample rate for VAD processing |
+
+
 
 #### Logging Configuration
 
 | Parameter         | Type | Default                         | Options                               | Description               |
 | ----------------- | ---- | ------------------------------- | ------------------------------------- | ------------------------- | ------------------------- | --- | ------------------------------ |
-| `level`           | str  | "INFO"                          | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level         |
-| `format`          | str  | "{time:YYYY-MM-DD HH:mm:ss}     | {level}                               | {name}                    | {message}"                | -   | Log message format             |
-| `file_enabled`    | bool | true                            | [true, false]                         | Enable file logging       |
-| `file_path`       | str  | "vistreamasr.log"               | -                                     | Log file path             |
-| `rotation`        | str  | "10 MB"                         | -                                     | Log file rotation size    |
-| `retention`       | str  | "7 days"                        | -                                     | Log file retention period |
-| `console_enabled` | bool | true                            | [true, false]                         | Enable console logging    |
-| `console_format`  | str  | "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level>            | <cyan>{name}</cyan>       | <level>{message}</level>" | -   | Console log format with colors |
+| `file_log_level`           | str  | "INFO"                          | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level for file output         |
+| `console_log_level`           | str  | "INFO"                          | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level for console output         |
+| `rotation`          | str  | None     | -                | Log file rotation size    |
+| `retention`    | str | None                            | -                         | Log file retention period       |
+| `file_path`       | str  | None               | -                                     | Log file path             |
+| `format_string`        | str  | "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"                         | -                                     | Log message format    |
+| `enable_colors` | bool | true                            | [true, false]                         | Enable colored output for console logs       |
+| `log_to_json` | bool | false                            | [true, false]                         | Enable JSON file logging. |
 
 ## 3. Configuration Loading Process
 
 ### 3.1 Loading Sequence
 
 ```python
-def load_configuration(config_file=None, cli_args=None):
+def get_settings(config_path: Optional[Path] = None) -> ViStreamASRSettings:
     """Load configuration from all sources with proper priority."""
 
     # 1. Start with default values
-    settings = ViStreamASRSettings()
+    settings = ViStreamASRSettings.load_from_toml(config_path)
 
-    # 2. Load from TOML file if specified
-    if config_file and os.path.exists(config_file):
-        settings = ViStreamASRSettings(_env_file=config_file)
-
-    # 3. Environment variables are automatically loaded by pydantic-settings
-    # 4. CLI arguments would be applied programmatically
-    if cli_args:
-        settings = apply_cli_overrides(settings, cli_args)
+    # 2. Environment variables are automatically loaded by pydantic-settings
+    # 3. CLI arguments are applied manually in the CLI module
 
     return settings
 ```
@@ -194,7 +192,7 @@ The system provides comprehensive validation and error handling:
 
 ```python
 try:
-    settings = ViStreamASRSettings(_env_file="config.toml")
+    settings = get_settings()
 except ValidationError as e:
     print(f"Configuration validation error: {e}")
     sys.exit(1)
@@ -216,24 +214,19 @@ except Exception as e:
 
 ```python
 class StreamingASR:
-    def __init__(self, settings=None, chunk_size_ms=640,
-                 auto_finalize_after=15.0, debug=False, vad_config=None):
+    def __init__(self, settings: Optional[ViStreamASRSettings] = None, **kwargs):
         """Initialize streaming ASR with configuration support."""
 
         # Use settings object if provided
         if settings is not None:
             self.settings = settings
-            self.chunk_size_ms = settings.model.chunk_size_ms
-            self.auto_finalize_after = settings.model.auto_finalize_after
-            self.debug = settings.model.debug
-            self.vad_config = settings.vad.model_dump() if settings.vad.enabled else None
         else:
             # Legacy support for direct parameters
-            self.settings = None
-            self.chunk_size_ms = chunk_size_ms
-            self.auto_finalize_after = auto_finalize_after
-            self.debug = debug
-            self.vad_config = vad_config or {}
+            self.settings = ViStreamASRSettings(
+                model=ModelConfig(**kwargs),
+                vad=VADConfig(**kwargs.get('vad_config', {})),
+                logging=LoggingConfig()
+            )
 ```
 
 ### 4.2 CLI Interface Integration
@@ -243,22 +236,18 @@ def main():
     """Main CLI entry point with configuration support."""
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', help='Path to configuration file')
-    parser.add_argument('--chunk-size', type=int, help='Chunk size in milliseconds')
-    parser.add_argument('--show-debug', action='store_true', help='Enable debug logging')
+    # ... other arguments
 
     args = parser.parse_args()
 
     # Load configuration
-    settings = load_configuration(args.config)
+    settings = get_settings(args.config)
 
     # Apply CLI overrides
-    if args.chunk_size:
-        settings.model.chunk_size_ms = args.chunk_size
-    if args.show_debug:
-        settings.model.debug = True
+    # ...
 
     # Initialize logging
-    setup_logging(settings.logging)
+    setup_logging(settings.logging.model_dump())
 
     # Initialize components with settings
     asr = StreamingASR(settings=settings)
@@ -268,19 +257,12 @@ def main():
 
 ```python
 class ASREngine:
-    def __init__(self, settings=None, chunk_size_ms=640,
-                 max_duration_before_forced_finalization=15.0, debug_mode=False):
+    def __init__(self, settings: ViStreamASRSettings):
         """Initialize ASR engine with configuration support."""
 
-        if settings is not None:
-            self.chunk_size_ms = settings.model.chunk_size_ms
-            self.max_duration_before_forced_finalization = settings.model.auto_finalize_after
-            self.debug_mode = settings.model.debug
-        else:
-            # Legacy parameter support
-            self.chunk_size_ms = chunk_size_ms
-            self.max_duration_before_forced_finalization = max_duration_before_forced_finalization
-            self.debug_mode = debug_mode
+        self.chunk_size_ms = settings.model.chunk_size_ms
+        self.max_duration_before_forced_finalization = settings.model.auto_finalize_after
+        self.debug_mode = settings.model.debug
 ```
 
 ## 5. Configuration Management Features
@@ -291,14 +273,13 @@ The system provides comprehensive type safety:
 
 ```python
 class ModelConfig(BaseModel):
-    chunk_size_ms: int = Field(640, ge=100, le=2000)
-    auto_finalize_after: float = Field(15.0, ge=1.0, le=60.0)
-    debug: bool = False
+    chunk_size_ms: int = Field(gt=0)
+    auto_finalize_after: float = Field(gt=0.5, le=60.0)
 ```
 
 **Validation Features:**
 
-- **Range Checking**: `ge` (greater than or equal), `le` (less than or equal)
+- **Range Checking**: `gt` (greater than), `le` (less than or equal)
 - **Type Validation**: Automatic type conversion and validation
 - **Custom Validators**: Support for custom validation functions
 - **Error Messages**: Detailed error messages for validation failures
@@ -315,9 +296,7 @@ config_dict = settings.model_dump()
 config_json = settings.model_dump_json()
 
 # Serialize to TOML
-import toml
-with open('config.toml', 'w') as f:
-    toml.dump(settings.model_dump(), f)
+settings.save_to_toml(Path('config.toml'))
 ```
 
 ### 5.3 Configuration Diffing
@@ -346,13 +325,13 @@ def config_diff(config1, config2):
 ### 6.1 Basic Usage
 
 ```python
-from vistreamasr import ViStreamASRSettings, setup_logging, StreamingASR
+from vistreamasr import get_settings, setup_logging, StreamingASR
 
 # Load default configuration
-settings = ViStreamASRSettings()
+settings = get_settings()
 
 # Initialize logging
-setup_logging(settings.logging)
+setup_logging(settings.logging.model_dump())
 
 # Initialize ASR
 asr = StreamingASR(settings=settings)
@@ -362,7 +341,7 @@ asr = StreamingASR(settings=settings)
 
 ```python
 # Load from custom configuration file
-settings = ViStreamASRSettings(_env_file="custom_config.toml")
+settings = get_settings(Path("custom_config.toml"))
 
 # Use the configuration
 asr = StreamingASR(settings=settings)
@@ -385,13 +364,13 @@ python -m vistreamasr transcribe audio.wav
 # Create configuration programmatically
 from vistreamasr.config import ViStreamASRSettings, ModelConfig, VADConfig, LoggingConfig
 
-model_config = ModelConfig(chunk_size_ms=500, debug=True)
-vad_config = VADConfig(enabled=True, threshold=0.7)
-logging_config = LoggingConfig(level="DEBUG")
+model_config = ModelConfig(chunk_size_ms=500)
+_vad_config = VADConfig(enabled=True, aggressiveness=2)
+logging_config = LoggingConfig(console_log_level="DEBUG")
 
 settings = ViStreamASRSettings(
     model=model_config,
-    vad=vad_config,
+    vad=_vad_config,
     logging=logging_config
 )
 ```
@@ -408,8 +387,7 @@ def test_default_configuration():
     """Test that default configuration loads correctly."""
     settings = ViStreamASRSettings()
     assert settings.model.chunk_size_ms == 640
-    assert settings.model.debug == False
-    assert settings.vad.enabled == False
+    assert settings.vad.enabled == True
 
 def test_configuration_validation():
     """Test that configuration validation works."""
@@ -419,7 +397,7 @@ def test_configuration_validation():
 
     # Invalid configuration
     with pytest.raises(ValidationError):
-        ModelConfig(chunk_size_ms=50)  # Below minimum
+        ModelConfig(chunk_size_ms=-50)  # Below minimum
 ```
 
 ### 7.2 Integration Testing
@@ -432,7 +410,6 @@ def test_configuration_integration():
     # Test with StreamingASR
     asr = StreamingASR(settings=settings)
     assert asr.chunk_size_ms == settings.model.chunk_size_ms
-    assert asr.debug == settings.model.debug
 ```
 
 ## 8. Performance Considerations
@@ -489,22 +466,22 @@ ls -la config.toml
 
 ```bash
 # Error: Configuration validation failed
-# vistreamasr.config.ValidationException: chunk_size_ms must be >= 100
+# vistreamasr.config.ValidationException: chunk_size_ms must be > 0
 
 # Solution: Check configuration values
-# Edit config.toml and ensure chunk_size_ms >= 100
+# Edit config.toml and ensure chunk_size_ms > 0
 ```
 
 #### Environment Variable Issues
 
 ```bash
 # Error: Environment variable not parsed
-# vistreamasr.config.ValidationException: invalid boolean value for VISTREAMASR_MODEL__DEBUG
+# vistreamasr.config.ValidationException: invalid boolean value for VISTREAMASR_VAD__ENABLED
 
 # Solution: Use correct boolean values
-export VISTREAMASR_MODEL__DEBUG=true  # Correct
-export VISTREAMASR_MODEL__DEBUG=True  # Also correct
-export VISTREAMASR_MODEL__DEBUG=1     # Incorrect
+export VISTREAMASR_VAD__ENABLED=true  # Correct
+export VISTREAMASR_VAD__ENABLED=True  # Also correct
+export VISTREAMASR_VAD__ENABLED=1     # Incorrect
 ```
 
 ### 10.2 Debug Configuration
@@ -516,7 +493,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Load configuration with debug output
-settings = ViStreamASRSettings()
+settings = get_settings()
 ```
 
 ## 11. Future Enhancements

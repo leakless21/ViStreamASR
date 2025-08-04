@@ -31,6 +31,10 @@ from .logging import log_with_symbol, get_logger
 # Get logger for this module
 logger = get_logger(__name__)
 
+# Define constants for magic numbers
+FINAL_CHUNK_PADDING_SAMPLES = 2000
+MINIMUM_CHUNK_SIZE_SAMPLES = 320
+
 # Define symbols that work across platforms
 symbols = {
     'tool': '🔧' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[CONFIG]',
@@ -60,8 +64,8 @@ def get_cache_dir():
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
-def pad_list(xs: List[torch.Tensor], pad_value: int):
-    """Perform padding for the list of tensors."""
+def _pad_tensor_list(xs: List[torch.Tensor], pad_value: int) -> torch.Tensor:
+    """Private helper to perform padding for the list of tensors."""
     n_batch = len(xs)
     max_len = max([x.size(0) for x in xs])
     pad = torch.zeros(n_batch, max_len, dtype=xs[0].dtype, device=xs[0].device)
@@ -69,6 +73,10 @@ def pad_list(xs: List[torch.Tensor], pad_value: int):
     for i in range(n_batch):
         pad[i, :xs[i].size(0)] = xs[i]
     return pad
+
+def pad_list(xs: List[torch.Tensor], pad_value: int):
+    """Perform padding for the list of tensors."""
+    return _pad_tensor_list(xs, pad_value)
 
 def add_sos_eos(ys_pad: torch.Tensor, sos: int, eos: int,
                 ignore_id: int) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -82,11 +90,11 @@ def add_sos_eos(ys_pad: torch.Tensor, sos: int, eos: int,
 
 def reverse_pad_list(ys_pad: torch.Tensor, ys_lens: torch.Tensor, pad_value: float = -1.0) -> torch.Tensor:
     """Reverse padding for the list of tensors."""
-    r_ys_pad = pad_sequence([(torch.flip(y.int()[:i], [0]))
-                             for y, i in zip(ys_pad, ys_lens)], True, pad_value)
+    r_ys_pad = _pad_tensor_list([(torch.flip(y.int()[:i], [0]))
+                                 for y, i in zip(ys_pad, ys_lens)], pad_value)
     return r_ys_pad
 
-def compute_fbank(wav_path=None, waveform=None, sample_rate=16000, 
+def compute_fbank(wav_path=None, waveform=None, sample_rate=16000,
                   num_mel_bins=80, frame_length=25, frame_shift=10):
     """Extract fbank features."""
     if waveform is None:
@@ -380,7 +388,7 @@ class IncrementalASR():
         
         if len(audio_wav) > 0:
             if last:
-                audio_wav = torch.cat([audio_wav, torch.tensor([0.]*2000, dtype=torch.float32, device=self.device)])
+                audio_wav = torch.cat([audio_wav, torch.tensor([0.]*FINAL_CHUNK_PADDING_SAMPLES, dtype=torch.float32, device=self.device)])
                 
             for cur in range(0, len(audio_wav), self.fbank_interval):
                 if last:
@@ -429,10 +437,9 @@ class IncrementalASR():
 
         return torch.cat(outputs, 1), torch.cat(emissions, 1)
 
-class ASREngine:
-    """Main ASR Engine class that handles all streaming functionality."""
-    
-    def __init__(self, chunk_size_ms=640, max_duration_before_forced_finalization=15.0, debug_mode=False):
+class ASRState:
+    """Manages the state for the ASR Engine."""
+    def __init__(self):
         # Model components
         self.acoustic_model = None
         self.ngram_lm = None
@@ -444,6 +451,16 @@ class ASREngine:
         self.buffer_emission = None
         self.buffer_encode_out = None
         self.chunks_since_last_finalization = 0
+        
+        # Timing tracking for pure ASR performance
+        self.asr_processing_time = 0.0
+        self.asr_audio_duration = 0.0
+
+class ASREngine:
+    """Main ASR Engine class that handles all streaming functionality."""
+    
+    def __init__(self, chunk_size_ms=640, max_duration_before_forced_finalization=15.0, debug_mode=False):
+        self.state = ASRState()
         
         # Configuration
         self.chunk_size_ms = chunk_size_ms
@@ -460,42 +477,38 @@ class ASREngine:
             print(f"{symbols['tool']} [CONFIG] Max duration before forced finalization: {self.max_duration_before_forced_finalization}s")
             print(f"{symbols['tool']} [CONFIG] Max chunks before forced finalization: {self.max_chunks_before_forced_finalization}")
         
-        # Timing tracking for pure ASR performance
-        self.asr_processing_time = 0.0
-        self.asr_audio_duration = 0.0
-        
     def initialize_models(self):
         """Initialize all models if not already loaded."""
-        if self.acoustic_model is None:
-            self.acoustic_model, self.ngram_lm, self.beam_search = load_models(debug_mode=self.debug_mode)
-            self.asr_realtime_model = IncrementalASR(self.acoustic_model, device=device)
+        if self.state.acoustic_model is None:
+            self.state.acoustic_model, self.state.ngram_lm, self.state.beam_search = load_models(debug_mode=self.debug_mode)
+            self.state.asr_realtime_model = IncrementalASR(self.state.acoustic_model, device=device)
     
     def reset_state(self):
         """Reset ASR state and transcription."""
         if self.debug_mode:
             print(f"{symbols['clean']} [STATE] Resetting ASR state...")
-        if self.asr_realtime_model is not None:
-            self.asr_realtime_model.reset_cache()
+        if self.state.asr_realtime_model is not None:
+            self.state.asr_realtime_model.reset_cache()
             if self.debug_mode:
                 print(f"{symbols['clean']} [STATE] Incremental ASR cache cleared")
         
-        old_transcription = self.current_transcription
-        self.current_transcription = ""
-        self.buffer_emission = None
-        self.buffer_encode_out = None
-        self.chunks_since_last_finalization = 0
+        old_transcription = self.state.current_transcription
+        self.state.current_transcription = ""
+        self.state.buffer_emission = None
+        self.state.buffer_encode_out = None
+        self.state.chunks_since_last_finalization = 0
         
         # Reset ASR timing
-        self.asr_processing_time = 0.0
-        self.asr_audio_duration = 0.0
+        self.state.asr_processing_time = 0.0
+        self.state.asr_audio_duration = 0.0
         
         if self.debug_mode:
             print(f"{symbols['clean']} [STATE] State reset complete. Old transcription: '{old_transcription}'")
     
     def get_asr_rtf(self):
         """Get the pure ASR processing RTF (computational performance only)."""
-        if self.asr_audio_duration > 0:
-            return self.asr_processing_time / self.asr_audio_duration
+        if self.state.asr_audio_duration > 0:
+            return self.state.asr_processing_time / self.state.asr_audio_duration
         return 0.0
     
     def _prepare_audio_tensor(self, audio_data):
@@ -515,23 +528,23 @@ class ASREngine:
     
     def _update_buffers(self, emission, encoder_out):
         """Update emission and encoder buffers."""
-        if self.buffer_emission is None:
-            self.buffer_emission = emission
-            self.buffer_encode_out = encoder_out
+        if self.state.buffer_emission is None:
+            self.state.buffer_emission = emission
+            self.state.buffer_encode_out = encoder_out
         else:
-            self.buffer_emission = torch.cat([self.buffer_emission, emission], 1)
-            self.buffer_encode_out = torch.cat([self.buffer_encode_out, encoder_out], 1)
+            self.state.buffer_emission = torch.cat([self.state.buffer_emission, emission], 1)
+            self.state.buffer_encode_out = torch.cat([self.state.buffer_encode_out, encoder_out], 1)
     
     def _reset_buffers(self):
         """Reset buffers after finalization."""
-        self.buffer_emission = None
-        self.buffer_encode_out = None
-        self.current_transcription = ""
+        self.state.buffer_emission = None
+        self.state.buffer_encode_out = None
+        self.state.current_transcription = ""
     
     def _run_lm_pipeline(self, buffer_emission, buffer_encode_out):
         """Run full language model pipeline."""
-        ngram_best, beam_tokens, beam_transcripts = ngram_beam_search(self.ngram_lm, buffer_emission)
-        cls_best = clm_beam_ranking(self.acoustic_model, buffer_encode_out, beam_tokens, beam_transcripts)
+        ngram_best, beam_tokens, beam_transcripts = ngram_beam_search(self.state.ngram_lm, buffer_emission)
+        cls_best = clm_beam_ranking(self.state.acoustic_model, buffer_encode_out, beam_tokens, beam_transcripts)
         
         if len(cls_best) > 0 and len(cls_best[0]) > 0:
             return cls_best[0]
@@ -540,13 +553,12 @@ class ASREngine:
     def _create_default_result(self):
         """Create default result dictionary."""
         return {
-            'current_transcription': self.current_transcription,
+            'current_transcription': self.state.current_transcription,
             'new_final_text': None
         }
     
-    def process_audio_chunk(self, audio_data, sample_rate, is_last=False):
-        """Process a single audio chunk (core streaming logic)."""
-        # Check if audio_data has same size as chunk_size_ms
+    def _validate_and_log_audio_chunk(self, audio_data, sample_rate, is_last):
+        """Validate audio chunk size and log information."""
         expected_samples = int(sample_rate * self.chunk_size_ms / 1000.0)
         actual_samples = len(audio_data)
         
@@ -567,103 +579,71 @@ class ASREngine:
             # Perfect size match
             if self.debug_mode:
                 print(f"{symbols['check']} [CHUNK-SIZE] Perfect size: {actual_samples} samples ({self.chunk_size_ms}ms)")
-        
-        if self.asr_realtime_model is None:
-            return {
-                'current_transcription': self.current_transcription,
-                'new_final_text': None
-            }
-        
-        # Track audio duration for ASR timing
-        chunk_duration = len(audio_data) / sample_rate
-        asr_start_time = time.time()
-        
-        # Debug info at start of processing
-        buffer_size = self.buffer_emission.size(1) if self.buffer_emission is not None else 0
-        self.chunks_since_last_finalization += 1
-        if self.debug_mode:
-            print(f"{symbols['tool']} [CHUNK] Audio: {len(audio_data)} samples | Buffer: {buffer_size} frames | is_last: {is_last} | Chunks since finalization: {self.chunks_since_last_finalization}")
-        
-        # Convert to tensor and normalize
-        audio_tensor = self._prepare_audio_tensor(audio_data)
-        
-        # Skip processing if chunk is too short
-        if len(audio_tensor) < 320:
-            if self.debug_mode:
-                print(f"{symbols['skip']}  [CHUNK] Skipping short chunk: {len(audio_tensor)} samples < 320")
-            return {
-                'current_transcription': self.current_transcription,
-                'new_final_text': None
-            }
-        
-        if self.debug_mode:
-            print(f"{symbols['check']} [CHUNK] Processing valid chunk: {len(audio_tensor)} samples")
-        
-        result = self._create_default_result()
-        
-        # Handle last chunk
-        if is_last:
-            if self.debug_mode:
-                print(f"{symbols['finish']} [LAST] Processing final chunk with is_last=True")
-            
-            if len(audio_tensor) > 0:
-                try:
-                    if self.debug_mode:
-                        print(f"{symbols['finish']} [LAST] Processing final audio chunk first...")
-                    encoder_out, emission = self.asr_realtime_model.forward(audio_tensor, last=False)
-                    
-                    if emission is not None:
-                        emission_frames = emission.size(1)
-                        if self.debug_mode:
-                            print(f"{symbols['finish']} [LAST] Final chunk added {emission_frames} frames to buffer")
-                        self._update_buffers(emission, encoder_out)
-                except Exception as e:
-                    if self.debug_mode:
-                        print(f"{symbols['warning']}  [LAST] Error processing final audio chunk: {e}")
-            
-            if self.buffer_emission is not None:
-                buffer_size = self.buffer_emission.size(1)
-                if self.debug_mode:
-                    print(f"{symbols['finish']} [LAST] Buffer has {buffer_size} frames for final processing")
-                try:
-                    encoder_out, emission = self.asr_realtime_model.forward(torch.tensor([], dtype=torch.float32, device=device), last=True)
-                    if self.debug_mode:
-                        print(f"{symbols['finish']} [LAST] Incremental ASR finalization complete")
-                    
-                    if self.buffer_emission.size(1) > 0:
-                        if self.debug_mode:
-                            print(f"{symbols['finish']} [LAST] Running final LM pipeline...")
-                        final_text = self._run_lm_pipeline(self.buffer_emission, self.buffer_encode_out)
-                        if self.debug_mode:
-                            print(f"{symbols['finish']} [LAST] Final text set: '{final_text}'")
-                        result['new_final_text'] = final_text
-                    else:
-                        if self.debug_mode:
-                            print(f"{symbols['finish']} [LAST] Buffer is empty, no final processing needed")
-                    
-                    if self.debug_mode:
-                        print(f"{symbols['finish']} [LAST] Resetting buffers after final processing")
-                    self._reset_buffers()
-                except Exception as e:
-                    if self.debug_mode:
-                        print(f"{symbols['warning']}  [LAST] Final chunk processing error (ignored): {e}")
-            else:
-                if self.debug_mode:
-                    print(f"{symbols['finish']} [LAST] No buffer for final processing")
-            
-            asr_end_time = time.time()
-            self.asr_processing_time += (asr_end_time - asr_start_time)
-            self.asr_audio_duration += chunk_duration
-            
-            return result
 
-        # Process audio as speech
+    def _handle_last_chunk_processing(self, audio_tensor, result, asr_start_time, chunk_duration):
+        """Handle the processing of the last audio chunk."""
+        if self.debug_mode:
+            print(f"{symbols['finish']} [LAST] Processing final chunk with is_last=True")
+        
+        if len(audio_tensor) > 0:
+            try:
+                if self.debug_mode:
+                    print(f"{symbols['finish']} [LAST] Processing final audio chunk first...")
+                encoder_out, emission = self.state.asr_realtime_model.forward(audio_tensor, last=False)
+                
+                if emission is not None:
+                    emission_frames = emission.size(1)
+                    if self.debug_mode:
+                        print(f"{symbols['finish']} [LAST] Final chunk added {emission_frames} frames to buffer")
+                    self._update_buffers(emission, encoder_out)
+            except Exception as e:
+                if self.debug_mode:
+                    print(f"{symbols['warning']}  [LAST] Error processing final audio chunk: {e}")
+        
+        if self.state.buffer_emission is not None:
+            buffer_size = self.state.buffer_emission.size(1)
+            if self.debug_mode:
+                print(f"{symbols['finish']} [LAST] Buffer has {buffer_size} frames for final processing")
+            try:
+                encoder_out, emission = self.state.asr_realtime_model.forward(torch.tensor([], dtype=torch.float32, device=device), last=True)
+                if self.debug_mode:
+                    print(f"{symbols['finish']} [LAST] Incremental ASR finalization complete")
+                
+                if self.state.buffer_emission.size(1) > 0:
+                    if self.debug_mode:
+                        print(f"{symbols['finish']} [LAST] Running final LM pipeline...")
+                    final_text = self._run_lm_pipeline(self.state.buffer_emission, self.state.buffer_encode_out)
+                    if self.debug_mode:
+                        print(f"{symbols['finish']} [LAST] Final text set: '{final_text}'")
+                    result['new_final_text'] = final_text
+                else:
+                    if self.debug_mode:
+                        print(f"{symbols['finish']} [LAST] Buffer is empty, no final processing needed")
+                
+                if self.debug_mode:
+                    print(f"{symbols['finish']} [LAST] Resetting buffers after final processing")
+                self._reset_buffers()
+            except Exception as e:
+                if self.debug_mode:
+                    print(f"{symbols['warning']}  [LAST] Final chunk processing error (ignored): {e}")
+        else:
+            if self.debug_mode:
+                print(f"{symbols['finish']} [LAST] No buffer for final processing")
+        
+        asr_end_time = time.time()
+        self.state.asr_processing_time += (asr_end_time - asr_start_time)
+        self.state.asr_audio_duration += chunk_duration
+        
+        return result
+
+    def _handle_speech_chunk_processing(self, audio_tensor, result):
+        """Handle the processing of a regular speech chunk."""
         if len(audio_tensor) > 0:
             try:
                 if self.debug_mode:
                     print(f"{symbols['green']} [SPEECH] Processing speech chunk...")
                 
-                encoder_out, emission = self.asr_realtime_model.forward(audio_tensor, last=False)
+                encoder_out, emission = self.state.asr_realtime_model.forward(audio_tensor, last=False)
                 
                 if emission is not None:
                     emission_frames = emission.size(1)
@@ -671,28 +651,28 @@ class ASREngine:
                     if self.debug_mode:
                         print(f"{symbols['chart']} [ASR] New frames - Emission: {emission_frames}, Encoder: {encoder_frames}")
                     
-                    old_buffer_size = self.buffer_emission.size(1) if self.buffer_emission is not None else 0
-                    if self.buffer_emission is None:
+                    old_buffer_size = self.state.buffer_emission.size(1) if self.state.buffer_emission is not None else 0
+                    if self.state.buffer_emission is None:
                         self._update_buffers(emission, encoder_out)
                         if self.debug_mode:
                             print(f"{symbols['buffer']} [BUFFER] Created new buffer with {emission_frames} frames")
                     else:
                         self._update_buffers(emission, encoder_out)
                         if self.debug_mode:
-                            print(f"{symbols['buffer']} [BUFFER] Extended buffer: {old_buffer_size} → {self.buffer_emission.size(1)} frames")
+                            print(f"{symbols['buffer']} [BUFFER] Extended buffer: {old_buffer_size} → {self.state.buffer_emission.size(1)} frames")
                     
-                    beam_result = ngram_beam_search(self.beam_search, self.buffer_emission)
+                    beam_result = ngram_beam_search(self.state.beam_search, self.state.buffer_emission)
                     new_transcription = beam_result[0][0] if beam_result[0] else ""
                     
-                    if new_transcription != self.current_transcription:
+                    if new_transcription != self.state.current_transcription:
                         if self.debug_mode:
-                            print(f"{symbols['memo']} [PARTIAL] '{self.current_transcription}' → '{new_transcription}'")
-                        self.current_transcription = new_transcription
+                            print(f"{symbols['memo']} [PARTIAL] '{self.state.current_transcription}' → '{new_transcription}'")
+                        self.state.current_transcription = new_transcription
                     else:
                         if self.debug_mode:
                             print(f"{symbols['memo']} [PARTIAL] No change: '{new_transcription}'")
                     
-                    result['current_transcription'] = self.current_transcription
+                    result['current_transcription'] = self.state.current_transcription
                 else:
                     if self.debug_mode:
                         print(f"{symbols['warning']}  [ASR] No emission returned from forward pass")
@@ -700,46 +680,91 @@ class ASREngine:
             except Exception as e:
                 if self.debug_mode:
                     print(f"{symbols['warning']}  ASR processing error (chunk skipped): {e}")
-                result['current_transcription'] = self.current_transcription
-        
-        # Check for forced finalization
-        force_finalization = (self.chunks_since_last_finalization >= self.max_chunks_before_forced_finalization and 
-                             self.buffer_emission is not None and 
-                             self.buffer_emission.size(1) > 100)
+                result['current_transcription'] = self.state.current_transcription
+        return result
+
+    def _handle_forced_finalization(self, result, asr_start_time, chunk_duration):
+        """Check for and execute forced finalization."""
+        force_finalization = (self.state.chunks_since_last_finalization >= self.max_chunks_before_forced_finalization and 
+                             self.state.buffer_emission is not None and 
+                             self.state.buffer_emission.size(1) > 100)
         
         if force_finalization:
             if self.debug_mode:
-                print(f"{symbols['clock']} [FORCED] Triggering forced finalization after {self.chunks_since_last_finalization} chunks")
+                print(f"{symbols['clock']} [FORCED] Triggering forced finalization after {self.state.chunks_since_last_finalization} chunks")
             try:
-                final_text = self._run_lm_pipeline(self.buffer_emission, self.buffer_encode_out)
+                final_text = self._run_lm_pipeline(self.state.buffer_emission, self.state.buffer_encode_out)
                 if self.debug_mode:
                     print(f"{symbols['finish']} [FORCED-FINAL] Forced finalization: '{final_text}'")
                 
                 result['new_final_text'] = final_text
-                self.chunks_since_last_finalization = 0
+                self.state.chunks_since_last_finalization = 0
                 self._reset_buffers()
                 
                 # Reset the incremental ASR cache for complete state consistency
-                if self.asr_realtime_model is not None:
-                    self.asr_realtime_model.reset_cache()
+                if self.state.asr_realtime_model is not None:
+                    self.state.asr_realtime_model.reset_cache()
                     if self.debug_mode:
                         print(f"{symbols['clean']} [FORCED] IncrementalASR cache reset for complete state consistency")
                 
                 asr_end_time = time.time()
-                self.asr_processing_time += (asr_end_time - asr_start_time)
-                self.asr_audio_duration += chunk_duration
+                self.state.asr_processing_time += (asr_end_time - asr_start_time)
+                self.state.asr_audio_duration += chunk_duration
                 
-                return result
+                return result # Return early after forced finalization
                 
             except Exception as e:
                 if self.debug_mode:
                     print(f"{symbols['warning']}  [FORCED] Forced finalization error: {e}")
             
-            self.chunks_since_last_finalization = 0
+            self.state.chunks_since_last_finalization = 0
+        return None # Indicate that forced finalization did not occur or failed
+    
+    def process_audio_chunk(self, audio_data, sample_rate, is_last=False):
+        """Process a single audio chunk (core streaming logic)."""
+        self._validate_and_log_audio_chunk(audio_data, sample_rate, is_last)
         
+        if self.state.asr_realtime_model is None:
+            return self._create_default_result()
+        
+        # Track audio duration for ASR timing
+        chunk_duration = len(audio_data) / sample_rate
+        asr_start_time = time.time()
+        
+        # Debug info at start of processing
+        buffer_size = self.state.buffer_emission.size(1) if self.state.buffer_emission is not None else 0
+        self.state.chunks_since_last_finalization += 1
+        if self.debug_mode:
+            print(f"{symbols['tool']} [CHUNK] Audio: {len(audio_data)} samples | Buffer: {buffer_size} frames | is_last: {is_last} | Chunks since finalization: {self.state.chunks_since_last_finalization}")
+        
+        # Convert to tensor and normalize
+        audio_tensor = self._prepare_audio_tensor(audio_data)
+        
+        # Skip processing if chunk is too short
+        if len(audio_tensor) < MINIMUM_CHUNK_SIZE_SAMPLES:
+            if self.debug_mode:
+                print(f"{symbols['skip']}  [CHUNK] Skipping short chunk: {len(audio_tensor)} samples < {MINIMUM_CHUNK_SIZE_SAMPLES}")
+            return self._create_default_result()
+        
+        if self.debug_mode:
+            print(f"{symbols['check']} [CHUNK] Processing valid chunk: {len(audio_tensor)} samples")
+        
+        result = self._create_default_result()
+        
+        if is_last:
+            return self._handle_last_chunk_processing(audio_tensor, result, asr_start_time, chunk_duration)
+
+        # Process audio as speech
+        result = self._handle_speech_chunk_processing(audio_tensor, result)
+
+        # Check for forced finalization
+        forced_result = self._handle_forced_finalization(result, asr_start_time, chunk_duration)
+        if forced_result: # If forced finalization happened, it returns the result
+            return forced_result
+
         asr_end_time = time.time()
-        self.asr_processing_time += (asr_end_time - asr_start_time)
-        self.asr_audio_duration += chunk_duration
+        self.state.asr_processing_time += (asr_end_time - asr_start_time)
+        self.state.asr_audio_duration += chunk_duration
         
         return result
     
@@ -747,8 +772,8 @@ class ASREngine:
         """Process audio data (source-agnostic)."""
         if audio_data is None or len(audio_data) == 0:
             return {
-                'current_transcription': self.current_transcription,
+                'current_transcription': self.state.current_transcription,
                 'new_final_text': None
             }
         
-        return self.process_audio_chunk(audio_data, 16000, is_last) 
+        return self.process_audio_chunk(audio_data, 16000, is_last)

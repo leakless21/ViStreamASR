@@ -12,8 +12,9 @@ import time
 from pathlib import Path
 
 # Initialize logging first
-from .logging import initialize_logging, log_with_symbol
+from .logging import initialize_logging, log_with_symbol, setup_logging
 
+from loguru import logger
 # Define symbols that work across platforms
 symbols = {
     'mic': '🎤' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[MIC]',
@@ -42,6 +43,31 @@ except ImportError:
     from config import ViStreamASRSettings
 
 
+def _wrap_and_print_text(text: str, width: int = 80):
+    """
+    Wrap and print text for better readability.
+    
+    Args:
+        text: The text to wrap and print
+        width: The maximum width of each line (default: 80)
+    """
+    words = text.split()
+    lines = []
+    current_line = ""
+    for word in words:
+        if len(current_line + " " + word) <= width:
+            current_line += (" " if current_line else "") + word
+        else:
+            if current_line:
+                lines.append(current_line)
+            current_line = word
+    if current_line:
+        lines.append(current_line)
+    
+    for line in lines:
+        print(line)
+
+
 def transcribe_file_streaming(audio_file, settings: ViStreamASRSettings):
     """
     Transcribe an audio file using streaming ASR.
@@ -54,7 +80,7 @@ def transcribe_file_streaming(audio_file, settings: ViStreamASRSettings):
     log_with_symbol(symbols['folder'], f"Audio file: {audio_file}")
     log_with_symbol(symbols['ruler'], f"Chunk size: {settings.model.chunk_size_ms}ms")
     log_with_symbol(symbols['clock'], f"Auto-finalize after: {settings.model.auto_finalize_after}s")
-    log_with_symbol(symbols['tool'], f"Debug mode: {settings.model.debug}")
+    
     
     if not os.path.exists(audio_file):
         log_with_symbol(symbols['stop'], f"Error: Audio file not found: {audio_file}", "error")
@@ -72,7 +98,6 @@ def transcribe_file_streaming(audio_file, settings: ViStreamASRSettings):
     asr = StreamingASR(
         chunk_size_ms=settings.model.chunk_size_ms,
         auto_finalize_after=settings.model.auto_finalize_after,
-        debug=settings.model.debug,
         vad_config=vad_config
     )
     
@@ -94,7 +119,7 @@ def transcribe_file_streaming(audio_file, settings: ViStreamASRSettings):
                 log_with_symbol(
                     symbols['memo'], 
                     f"[PARTIAL {chunk_info.get('chunk_id', '?'):3d}] {current_partial}",
-                    "debug" if settings.model.debug else "info"
+                    "info"
                 )
             
             if result.get('final') and result.get('text'):
@@ -123,22 +148,7 @@ def transcribe_file_streaming(audio_file, settings: ViStreamASRSettings):
     
     log_with_symbol(symbols['memo'], "Complete Transcription:")
     complete_transcription = " ".join(final_segments)
-    # Wrap text at 80 characters for better readability
-    words = complete_transcription.split()
-    lines = []
-    current_line = ""
-    for word in words:
-        if len(current_line + " " + word) <= 80:
-            current_line += (" " if current_line else "") + word
-        else:
-            if current_line:
-                lines.append(current_line)
-            current_line = word
-    if current_line:
-        lines.append(current_line)
-    
-    for line in lines:
-        print(line)
+    _wrap_and_print_text(complete_transcription)
     
     log_with_symbol(symbols['check'], "Transcription completed successfully!")
     return 0
@@ -160,7 +170,7 @@ def transcribe_microphone_streaming(duration_seconds, settings: ViStreamASRSetti
         log_with_symbol(symbols['stopwatch'], f"Duration: {duration_seconds}s")
     else:
         log_with_symbol(symbols['stopwatch'], "Duration: Unlimited (Press Ctrl+C to stop)")
-    log_with_symbol(symbols['tool'], f"Debug mode: {settings.model.debug}")
+    
     
     # Check if microphone is available
     try:
@@ -190,7 +200,6 @@ def transcribe_microphone_streaming(duration_seconds, settings: ViStreamASRSetti
     asr = StreamingASR(
         chunk_size_ms=settings.model.chunk_size_ms,
         auto_finalize_after=settings.model.auto_finalize_after,
-        debug=settings.model.debug,
         vad_config=vad_config
     )
     
@@ -213,7 +222,7 @@ def transcribe_microphone_streaming(duration_seconds, settings: ViStreamASRSetti
                 log_with_symbol(
                     symbols['memo'], 
                     f"[PARTIAL {chunk_info.get('chunk_id', '?'):3d}] {current_partial}",
-                    "debug" if settings.model.debug else "info"
+                    "info"
                 )
             
             if result.get('final') and result.get('text'):
@@ -243,22 +252,7 @@ def transcribe_microphone_streaming(duration_seconds, settings: ViStreamASRSetti
     if final_segments:
         log_with_symbol(symbols['memo'], "Complete Transcription:")
         complete_transcription = " ".join(final_segments)
-        # Wrap text at 80 characters for better readability
-        words = complete_transcription.split()
-        lines = []
-        current_line = ""
-        for word in words:
-            if len(current_line + " " + word) <= 80:
-                current_line += (" " if current_line else "") + word
-            else:
-                if current_line:
-                    lines.append(current_line)
-                current_line = word
-        if current_line:
-            lines.append(current_line)
-        
-        for line in lines:
-            print(line)
+        _wrap_and_print_text(complete_transcription)
     else:
         log_with_symbol(symbols['memo'], "No speech detected or transcribed during recording")
     
@@ -266,8 +260,10 @@ def transcribe_microphone_streaming(duration_seconds, settings: ViStreamASRSetti
     return 0
 
 
+@logger.catch
 def main():
     """Main CLI entry point."""
+     # Use print as logger might not be set up
     parser = argparse.ArgumentParser(
         description="ViStreamASR - Vietnamese Streaming ASR Transcription",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -275,9 +271,10 @@ def main():
 Examples:
   %(prog)s transcribe audio.wav                                    # Basic file transcription
   %(prog)s transcribe audio.wav --config path/to/config.toml       # Use custom config
-  %(prog)s transcribe audio.wav --model.debug                      # Enable debug logging
+  %(prog)s transcribe audio.wav --logging.console-log-level DEBUG  # Set console log level to DEBUG
+  %(prog)s transcribe audio.wav --logging.file-log-level WARNING   # Set file log level to WARNING
   %(prog)s transcribe audio.wav --vad.enabled                      # Enable VAD
-   
+    
   %(prog)s microphone                                              # Record from microphone indefinitely
   %(prog)s microphone --duration 30                               # Record for 30 seconds
   %(prog)s microphone --config path/to/config.toml                # Use custom config
@@ -290,6 +287,23 @@ Examples:
         help='Path to TOML configuration file (default: looks for vistreamasr.toml in current and parent directories)'
     )
     
+    # Logging arguments (global)
+    logging_group = parser.add_argument_group('Logging Options')
+    logging_group.add_argument(
+        '--logging.console-log-level',
+        type=str,
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Set the console logging level (default: INFO)'
+    )
+    logging_group.add_argument(
+        '--logging.file-log-level',
+        type=str,
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Set the file logging level (default: INFO)'
+    )
+
     # Subcommands
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
@@ -316,11 +330,7 @@ Examples:
         type=float,
         help='Maximum duration in seconds before auto-finalizing a segment (default: 15.0s)'
     )
-    model_group.add_argument(
-        '--model.debug',
-        action='store_true',
-        help='Enable debug logging'
-    )
+    
     
     # VAD arguments
     vad_group = transcribe_parser.add_argument_group('VAD Options')
@@ -376,11 +386,7 @@ Examples:
         type=float,
         help='Maximum duration in seconds before auto-finalizing a segment (default: 15.0s)'
     )
-    mic_model_group.add_argument(
-        '--model.debug',
-        action='store_true',
-        help='Enable debug logging'
-    )
+    
     
     # VAD arguments for microphone
     mic_vad_group = microphone_parser.add_argument_group('VAD Options')
@@ -424,13 +430,45 @@ Examples:
     
     args = parser.parse_args()
     # DEBUG: Log the parsed args namespace
-    print(f"DEBUG cli.py: Parsed args namespace: {vars(args)}")
+    
     
     # Load configuration
     config_path = Path(args.config) if args.config else None
+    # Initialize logging with default or config file settings first
+    
+    # CLI args for logging will override these after initial setup
     settings = initialize_logging(config_path)
     
-    # Override settings with CLI arguments
+    
+    # Override logging settings with CLI arguments
+    if getattr(args, 'logging.console-log-level', None) is not None:
+        settings.logging.console_log_level = getattr(args, 'logging.console-log-level').upper()
+    if getattr(args, 'logging.file-log-level', None) is not None:
+        settings.logging.file_log_level = getattr(args, 'logging.file-log-level').upper()
+    
+    # Re-initialize logging with the potentially updated settings from CLI
+    # This ensures CLI logging overrides are applied correctly
+    from .config import get_settings
+    current_settings_dict = get_settings(config_path).model_dump()
+    # Update with CLI overrides for logging specifically
+    if getattr(args, 'logging.console-log-level', None) is not None:
+        current_settings_dict['logging']['console_log_level'] = getattr(args, 'logging.console-log-level').upper()
+    if getattr(args, 'logging.file-log-level', None) is not None:
+        current_settings_dict['logging']['file_log_level'] = getattr(args, 'logging.file-log-level').upper()
+    
+    # We need to pass the full settings dictionary to setup_logging
+    # The initialize_logging function already converts settings to a dict,
+    # but we need to ensure our CLI overrides are in that dict.
+    # A more direct way is to call setup_logging again with the modified dict.
+    
+    # Convert the entire settings object to dict, which now includes CLI overrides for logging
+    final_settings_dict = settings.model_dump()
+    setup_logging(final_settings_dict) # Re-apply logging setup with CLI overrides
+
+    logger.info(f"Console log level set to: {settings.logging.console_log_level}")
+    logger.info(f"File log level set to: {settings.logging.file_log_level}")
+
+    # Override settings with CLI arguments for model and VAD
     if args.command == 'transcribe':
         if getattr(args, 'model.chunk_size_ms', None) is not None:
             settings.model.chunk_size_ms = getattr(args, 'model.chunk_size_ms')
@@ -456,8 +494,7 @@ Examples:
             settings.model.chunk_size_ms = getattr(args, 'model.chunk_size_ms')
         if getattr(args, 'model.auto_finalize_after', None) is not None:
             settings.model.auto_finalize_after = getattr(args, 'model.auto_finalize_after')
-        if getattr(args, 'model.debug', False):
-            settings.model.debug = getattr(args, 'model.debug')
+        
         if getattr(args, 'vad.enabled', False):
             settings.vad.enabled = getattr(args, 'vad.enabled')
         if getattr(args, 'vad.threshold', None) is not None:

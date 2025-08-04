@@ -28,25 +28,51 @@
 
 ### 4. Integration with ViStreamASR ✅ IMPLEMENTED
 
-- **Audio Preprocessing**: Process audio chunks before sending to ASR engine
+- **Audio Preprocessing**: Process audio chunks before sending to the ASR engine
 - **Speech Filtering**: Only forward audio segments classified as speech to the ASR engine
 - **Silence Handling**: Efficiently handle silence periods without overloading the ASR engine
 - **Buffer Management**: Properly manage audio buffers to prevent data loss
 - **State Management**: Maintain VAD state between audio chunks for accurate detection
 
-### 5. Vietnamese Language Support ✅ IMPLEMENTED
+### 5. Streaming Interface Refactoring ✅ IMPLEMENTED
 
-- **Tone Handling**: Proper detection of Vietnamese tonal characteristics
-- **Dialect Support**: Handle regional dialect variations in Vietnamese speech
-- **Noise Robustness**: Maintain accuracy in various noise conditions typical in Vietnamese environments
-- **Language Agnostic**: Leverage Silero-VAD's multilingual capabilities for Vietnamese
+- **Facade Pattern**: StreamingASR acts as a facade for specialized streamers
+- **FileStreamer**: Dedicated component for file-based audio streaming
+- **MicrophoneStreamer**: Dedicated component for microphone audio streaming
+- **VAD Integration**: Seamless VAD integration through helper methods
+- **Configuration Management**: Centralized configuration for all streaming components
 
-### 6. Performance Requirements ✅ IMPLEMENTED
+### 6. Core Processing Refactoring ✅ IMPLEMENTED
 
-- **Low Latency**: Minimal processing delay to maintain real-time performance
-- **CPU Efficiency**: Optimize for single-threaded CPU performance as per Silero-VAD design
-- **Memory Management**: Efficient memory usage for embedded/edge deployment scenarios
-- **Scalability**: Support for multiple concurrent audio streams
+- **ASRState Class**: Separated state management from engine logic
+- **Helper Functions**: Extracted \_pad_tensor_list for tensor operations
+- **Named Constants**: Replaced magic numbers with named constants for better maintainability
+- **Private Method Refactoring**: Broke down process_audio_chunk into smaller, focused methods
+- **Improved Error Handling**: Enhanced validation and error reporting throughout processing
+
+### 7. CLI Interface Enhancements ✅ IMPLEMENTED
+
+- **Text Formatting**: Added \_wrap_and_print_text helper for consistent output formatting
+- **Configuration Support**: Full integration with hierarchical configuration system
+- **VAD Integration**: Support for VAD configuration through CLI arguments
+- **Progress Tracking**: Enhanced progress indicators and status reporting
+- **Error Handling**: Improved error reporting and recovery mechanisms
+
+### 8. Performance and Optimization ✅ IMPLEMENTED
+
+- **Real-time Processing**: Maintain real-time performance (RTF < 0.4x) on CPU
+- **GPU Acceleration**: Automatic GPU detection and utilization when available
+- **Memory Management**: Efficient memory usage for large audio files
+- **Model Caching**: Automatic model caching to avoid repeated downloads
+- **Chunk Processing**: Optimized chunk-based processing for low latency
+
+### 9. Code Quality and Maintainability ✅ IMPLEMENTED
+
+- **Modular Design**: Clear separation of concerns across components
+- **Helper Functions**: Eliminated code duplication through extracted helper functions
+- **Named Constants**: Improved code readability with meaningful constant names
+- **Documentation**: Comprehensive documentation aligned with code structure
+- **Testing**: Comprehensive test coverage for all components
 
 ## Non-Functional Requirements
 
@@ -67,7 +93,7 @@
 ### 3. Performance Metrics
 
 - **Processing Time**: Each 30ms+ audio chunk should be processed in <1ms on a single CPU thread
-- **Accuracy**: High accuracy on Vietnamese speech datasets with minimal false positives/negatives
+- **Accuracy**: High accuracy on speech datasets with minimal false positives/negatives
 - **RTF (Real-Time Factor)**: Maintain RTF < 0.1 for real-time streaming applications
 - **Memory Footprint**: Model size should remain under 5MB for efficient deployment
 
@@ -95,8 +121,9 @@
 - **Testing**: Comprehensive unit tests for all components including configuration and logging
 - **Documentation**: Clear API documentation and usage examples
 - **Type Safety**: Use of Pydantic for type-safe configuration management
+- **Code Organization**: Well-organized codebase with clear responsibilities and interfaces
 
-### 5. Security
+### 7. Security
 
 - **No Telemetry**: Ensure Silero-VAD's no-telemetry policy is maintained
 - **Data Privacy**: No storage or transmission of audio data outside the local system
@@ -110,6 +137,8 @@
 - **Audio Processing**: Stream-friendly API for processing audio chunks
 - **State Management**: API for managing VAD state between chunks
 - **Configuration**: Parameterized thresholds and timing controls
+- **Streaming Interface**: Unified API for file and microphone streaming
+- **VAD Integration**: Optional VAD processing with seamless fallback
 
 ### 2. Audio Processing Pipeline
 
@@ -117,6 +146,7 @@
 - **Sample Format**: Handle float32 audio tensors as used by ViStreamASR
 - **Resampling**: Automatic handling of different sample rates if needed
 - **Normalization**: Proper audio normalization for consistent VAD performance
+- **Format Support**: Support for WAV, MP3, FLAC, OGG, M4A and more via torchaudio
 
 ### 3. Threshold Tuning
 
@@ -125,21 +155,13 @@
 - **Minimum Silence Duration**: Configurable minimum silence duration (default: 250ms)
 - **Speech Start/End Padding**: Configurable padding around detected speech segments
 
-## Vietnamese Speech Considerations
+### 4. Configuration Integration
 
-### 1. Language Characteristics
-
-- **Tonal Nature**: Vietnamese is a tonal language with 6 tones that need to be preserved
-- **Monosyllabic Structure**: Many Vietnamese words are monosyllabic, requiring sensitivity to short speech segments
-- **Regional Variations**: Six major dialects with phonetic differences
-- **Loanwords**: Incorporation of Sino-Vietnamese, French, and English loanwords
-
-### 2. VAD Tuning for Vietnamese
-
-- **Threshold Adjustment**: Potentially lower threshold for detecting quieter tonal variations
-- **Duration Parameters**: Adjust minimum speech/silence durations for Vietnamese speech patterns
-- **Noise Handling**: Optimize for typical background noise in Vietnamese environments
-- **Cross-talk Handling**: Manage overlapping speech scenarios common in Vietnamese social contexts
+- **Hierarchical Settings**: Support for nested configuration structure
+- **Environment Variables**: Override with `VISTREAMASR_` prefix support
+- **CLI Arguments**: Full override capability for all parameters
+- **Validation**: Automatic validation with clear error messages
+- **Default Values**: Sensible defaults for all parameters
 
 ## Performance Optimization Strategies
 
@@ -149,6 +171,7 @@
 - **Batch Processing**: Consider batching for non-real-time scenarios to improve throughput
 - **Quantization**: Leverage Silero-VAD's quantized models for better performance
 - **Memory Layout**: Optimize tensor memory layout for cache efficiency
+- **Modular Processing**: Leverage refactored helper functions for better performance analysis
 
 ### 2. Latency Reduction
 
@@ -156,6 +179,7 @@
 - **Early Detection**: Implement early speech detection for faster ASR triggering
 - **Buffer Management**: Optimize buffer sizes to balance latency and efficiency
 - **Pre-fetching**: Pre-load VAD model to reduce initialization time
+- **Streaming Architecture**: Use optimized streaming components for lower latency
 
 ### 3. Resource Management
 
@@ -163,29 +187,55 @@
 - **Memory Pooling**: Reuse audio buffers to reduce memory allocation overhead
 - **Garbage Collection**: Minimize garbage collection impact during processing
 - **Power Management**: Optimize for low power consumption in mobile/edge scenarios
+- **State Management**: Efficient state handling to reduce memory overhead
 
 ## Implementation Status ✅ COMPLETED
 
 ### Core VAD Implementation ✅
 
-- **VADProcessor Class**: Implemented in [`src/vistreamasr/vad.py`](src/vistreamasr/vad.py:16) with full functionality
-- **VADASRCoordinator Class**: Implemented in [`src/vistreamasr/vad.py`](src/vistreamasr/vad.py:285) for seamless ASR integration
+- **VADProcessor Class**: Implemented in [`src/vistreamasr/vad.py`](src/vistreamasr/vad.py) with full functionality
+- **VADASRCoordinator Class**: Implemented in [`src/vistreamasr/vad.py`](src/vistreamasr/vad.py) for seamless ASR integration
 - **Configuration Support**: Full parameter configuration with sensible defaults
 - **Error Handling**: Comprehensive error handling and graceful degradation
 
+### Streaming Interface Refactoring ✅
+
+- **StreamingASR Class**: Refactored as facade in [`src/vistreamasr/streaming.py`](src/vistreamasr/streaming.py)
+- **FileStreamer Class**: New dedicated file streaming component in [`src/vistreamasr/streaming.py`](src/vistreamasr/streaming.py)
+- **MicrophoneStreamer Class**: New dedicated microphone streaming component in [`src/vistreamasr/streaming.py`](src/vistreamasr/streaming.py)
+- **VAD Integration**: Seamless VAD integration through helper methods
+- **Configuration Support**: Full configuration integration with validation
+
+### Core Processing Refactoring ✅
+
+- **ASREngine Class**: Refactored with improved separation of concerns in [`src/vistreamasr/core.py`](src/vistreamasr/core.py)
+- **ASRState Class**: New state management component in [`src/vistreamasr/core.py`](src/vistreamasr/core.py)
+- **Helper Functions**: Extracted `_pad_tensor_list` in [`src/vistreamasr/core.py`](src/vistreamasr/core.py)
+- **Named Constants**: Introduced `FINAL_CHUNK_PADDING_SAMPLES` and `MINIMUM_CHUNK_SIZE_SAMPLES` in [`src/vistreamasr/core.py`](src/vistreamasr/core.py)
+- **Private Methods**: Refactored `process_audio_chunk` into smaller, focused methods
+
+### CLI Interface Enhancements ✅
+
+- **CLI Functions**: Enhanced file and microphone processing in [`src/vistreamasr/cli.py`](src/vistreamasr/cli.py)
+- **Helper Function**: Added `_wrap_and_print_text` in [`src/vistreamasr/cli.py`](src/vistreamasr/cli.py)
+- **Configuration Support**: Full integration with hierarchical configuration
+- **VAD Integration**: Support for VAD configuration through CLI
+- **Error Handling**: Improved error reporting and recovery
+
 ### Integration Points ✅
 
-- **Streaming Interface**: Integrated into [`src/vistreamasr/streaming.py`](src/vistreamasr/streaming.py:57) with VAD support
-- **CLI Interface**: VAD parameters available in [`src/vistreamasr/cli.py`](src/vistreamasr/cli.py:52) for file and microphone processing
-- **State Management**: Proper state reset and coordination between VAD and ASR components
-- **Buffer Management**: Efficient handling of audio buffers between components
+- **Streaming Interface**: Integrated VAD support in [`src/vistreamasr/streaming.py`](src/vistreamasr/streaming.py)
+- **CLI Interface**: Full configuration integration in [`src/vistreamasr/cli.py`](src/vistreamasr/cli.py)
+- **Core Processing**: Enhanced state management in [`src/vistreamasr/core.py`](src/vistreamasr/core.py)
+- **Configuration System**: Package-level exports in [`src/vistreamasr/__init__.py`](src/vistreamasr/__init__.py)
 
 ### Testing and Validation ✅
 
-- **Unit Tests**: Comprehensive test suite in [`tests/test_vad_integration.py`](tests/test_vad_integration.py:17)
+- **Unit Tests**: Comprehensive test suite in [`tests/test_vad_integration.py`](tests/test_vad_integration.py)
 - **Integration Tests**: VAD-ASR coordination and workflow testing
 - **Performance Tests**: Processing time and memory usage validation
 - **Mock Testing**: Mock-based testing for VAD model interactions
+- **Refactoring Validation**: Tests for new helper functions and constants
 
 ## Configuration Parameters ✅ IMPLEMENTED
 
@@ -193,198 +243,47 @@
 
 | Parameter             | Default | Range         | Description                                      |
 | --------------------- | ------- | ------------- | ------------------------------------------------ |
-| `chunk_size_ms`       | 640     | [100, 2000]   | Audio chunk duration in milliseconds             |
-| `auto_finalize_after` | 15.0    | [1.0, 60.0]   | Maximum duration before auto-finalizing segments |
-| `debug`               | False   | [True, False] | Enable debug logging                             |
+| `name`       | "whisper"     | -   | Name of the ASR model to use             |
+| `chunk_size_ms`       | 640     | >0   | Audio chunk duration in milliseconds             |
+| `stride_ms`       | 320     | >0   | Stride in milliseconds between chunks             |
+| `auto_finalize_after` | 15.0    | [0.5, 60.0]   | Maximum duration before auto-finalizing segments |
 
 ### VAD Configuration
 
 | Parameter                 | Default | Range         | Description                    |
 | ------------------------- | ------- | ------------- | ------------------------------ |
-| `enabled`                 | False   | [True, False] | Enable/disable VAD processing  |
-| `sample_rate`             | 16000   | [8000, 16000] | Audio sample rate              |
-| `threshold`               | 0.5     | [0.0, 1.0]    | Speech probability threshold   |
-| `min_speech_duration_ms`  | 250     | >0            | Minimum speech duration        |
-| `min_silence_duration_ms` | 100     | >0            | Minimum silence duration       |
-| `speech_pad_ms`           | 30      | ≥0            | Padding around speech segments |
+| `enabled`                 | True   | [True, False] | Enable/disable VAD processing  |
+| `aggressiveness`             | 3   | [0, 3] | VAD aggressiveness level (0-3)              |
+| `frame_size_ms`               | 30     | >0    | Frame size in milliseconds for VAD processing   |
+| `min_silence_duration_ms` | 500     | >0            | Minimum silence duration       |
+| `speech_pad_ms`           | 100      | >0            | Padding around speech segments |
+| `sample_rate`           | 16000      | -            | Audio sample rate for VAD processing |
 
 ### Logging Configuration
 
 | Parameter         | Default                         | Range                                 | Description               |
 | ----------------- | ------------------------------- | ------------------------------------- | ------------------------- | ------------------------- | --- | ------------------------------ |
-| `level`           | "INFO"                          | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level         |
-| `format`          | "{time:YYYY-MM-DD HH:mm:ss}     | {level}                               | {name}                    | {message}"                | -   | Log message format             |
-| `file_enabled`    | True                            | [True, False]                         | Enable file logging       |
-| `file_path`       | "vistreamasr.log"               | -                                     | Log file path             |
-| `rotation`        | "10 MB"                         | -                                     | Log file rotation size    |
-| `retention`       | "7 days"                        | -                                     | Log file retention period |
-| `console_enabled` | True                            | [True, False]                         | Enable console logging    |
-| `console_format`  | "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level>            | <cyan>{name}</cyan>       | <level>{message}</level>" | -   | Console log format with colors |
+| `file_log_level`           | "INFO"                          | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level for file output         |
+| `console_log_level`           | "INFO"                          | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level for console output         |
+| `rotation`          | None     | -                | Log file rotation size    |
+| `retention`    | None                            | -                         | Log file retention period       |
+| `file_path`       | None               | -                                     | Log file path             |
+| `format_string`        | "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"                         | -                                     | Log message format    |
+| `enable_colors` | True                            | [True, False]                         | Enable colored output for console logs       |
+| `log_to_json` | False                            | [True, False]                         | Enable JSON file logging. |
 
 ### CLI Parameters
 
 | Parameter                       | Default | Description                                                |
 | ------------------------------- | ------- | ---------------------------------------------------------- |
 | `--config`                      | None    | Path to configuration file                                 |
-| `--chunk-size`                  | 640     | Chunk size in milliseconds (100-2000ms)                    |
-| `--auto-finalize-after`         | 15.0    | Maximum duration before auto-finalizing segments (seconds) |
-| `--show-debug`                  | False   | Enable debug logging with detailed processing information  |
-| `--use-vad`                     | False   | Enable Voice Activity Detection                            |
-| `--vad-threshold`               | 0.5     | VAD speech probability threshold                           |
-| `--vad-min-speech-duration-ms`  | 250     | Minimum speech duration in milliseconds                    |
-| `--vad-min-silence-duration-ms` | 100     | Minimum silence duration in milliseconds                   |
-| `--vad-speech-pad-ms`           | 30      | Padding added to speech segments                           |
-
-## Dependencies and Compatibility ✅ IMPLEMENTED
-
-### Dependency Management
-
-The project now uses **Pixi** for dependency management, providing robust, multi-platform support with clear separation between Conda and PyPI dependencies.
-
-#### Conda Dependencies ([`tool.pixi.dependencies`](pyproject.toml:83))
-
-These dependencies are managed through Conda and are optimized for performance across different platforms.
-
-| Dependency  | Version  | Purpose                                     |
-| ----------- | -------- | ------------------------------------------- |
-| python      | >=3.8    | Core Python runtime                         |
-| librosa     | >=0.10.0 | Audio feature extraction                    |
-| numba       | >=0.59.0 | Just-in-time compilation for numerical code |
-| llvmlite    | >=0.41.0 | Low-level LLVM interface for Numba          |
-| numpy       | >=1.22.3 | Fundamental numerical computing library     |
-| requests    | >=2.32.4 | HTTP library for model downloads            |
-| sounddevice | >=0.5.2  | Audio playback and recording                |
-| pytorch     | >=2.7.1  | Deep learning framework                     |
-| torchaudio  | >=2.7.1  | Audio processing utilities for PyTorch      |
-
-#### PyPI Dependencies ([`tool.pixi.pypi-dependencies`](pyproject.toml:94))
-
-These dependencies are installed via pip and include the project itself and pure Python libraries.
-
-| Dependency      | Version                   | Purpose                                                            |
-| --------------- | ------------------------- | ------------------------------------------------------------------ |
-| vistreamasr     | {path=".", editable=true} | The ViStreamASR package itself (development/editable install)      |
-| flashlight-text | >=0.0.7                   | C++ library for fast text processing and decoding in ASR           |
-| silero-vad      | >=5.1.2                   | Pre-trained voice activity detection model (for VAD functionality) |
-
-#### Development Dependencies ([`tool.pixi.feature.dev.dependencies`](pyproject.toml:99))
-
-Development dependencies are managed as a Pixi feature, activated when using the `dev` environment.
-
-| Dependency | Version  | Purpose                    |
-| ---------- | -------- | -------------------------- |
-| black      | >=23.0.0 | Code formatter             |
-| isort      | >=5.12.0 | Import sorter              |
-| flake8     | >=6.0.0  | Code linter                |
-| pytest     | >=8.4.1  | Test runner                |
-| pytest-cov | >=4.1.0  | Coverage plugin for pytest |
-
-### Model Loading
-
-- **Automatic Fallback**: Supports both pip package and torch.hub model loading
-- **Error Handling**: Graceful fallback when model loading fails
-- **State Management**: Proper model state reset between sessions
-
-### Audio Format Support
-
-- **Input Formats**: WAV, MP3, FLAC, OGG, M4A (via torchaudio)
-- **Sample Rates**: 8000Hz and 16000Hz support
-- **Audio Normalization**: Automatic amplitude scaling to [-1, 1] range
-- **Channel Handling**: Automatic stereo-to-mono conversion
-
-## Performance Benchmarks ✅ VALIDATED
-
-### Processing Performance
-
-- **Model Loading Time**: ~1-2 seconds (cached after first load)
-- **Processing Time per Chunk**: <1ms for 30ms+ audio chunks on single CPU thread
-- **Memory Usage**: <10MB runtime overhead, ~2MB model size
-- **Real-Time Factor**: Maintains RTF < 0.1 for real-time streaming
-
-### Accuracy Metrics
-
-- **Speech Detection**: High accuracy with configurable threshold
-- **False Positive Rate**: Minimal false positives with proper threshold tuning
-- **Vietnamese Speech**: Optimized for Vietnamese tonal characteristics
-- **Noise Robustness**: Maintains accuracy in various noise conditions
-
-## Usage Examples ✅ IMPLEMENTED
-
-### Configuration File Usage
-
-```toml
-# vistreamasr.toml
-[model]
-chunk_size_ms = 640
-auto_finalize_after = 15.0
-debug = false
-
-[vad]
-enabled = true
-sample_rate = 16000
-threshold = 0.5
-min_speech_duration_ms = 250
-min_silence_duration_ms = 100
-speech_pad_ms = 30
-
-[logging]
-level = "INFO"
-file_enabled = true
-file_path = "vistreamasr.log"
-rotation = "10 MB"
-retention = "7 days"
-console_enabled = true
-```
-
-### Programmatic Usage
-
-```python
-from vistreamasr import ViStreamASRSettings, setup_logging, StreamingASR
-
-# Load configuration from file
-settings = ViStreamASRSettings()
-
-# Initialize logging
-setup_logging(settings.logging)
-
-# Initialize ASR with configuration
-asr = StreamingASR(settings=settings)
-
-# Process audio file
-for result in asr.stream_from_file("audio.wav"):
-    if result['final']:
-        print(f"Final: {result['text']}")
-```
-
-### Environment Variable Usage
-
-```bash
-# Set configuration via environment variables
-export VISTREAMASR_MODEL__CHUNK_SIZE_MS=500
-export VISTREAMASR_MODEL__DEBUG=true
-export VISTREAMASR_VAD__ENABLED=true
-export VISTREAMASR_VAD__THRESHOLD=0.7
-export VISTREAMASR_LOGGING__LEVEL=DEBUG
-
-# Run with environment configuration
-vistream-asr transcribe audio.wav
-```
-
-### CLI Usage with Configuration
-
-```bash
-# Use custom configuration file
-vistream-asr transcribe audio.wav --config custom_config.toml
-
-# Override configuration parameters
-vistream-asr transcribe audio.wav --chunk-size 500 --show-debug --use-vad
-
-# Enable VAD with custom parameters
-vistream-asr transcribe audio.wav --use-vad --vad-threshold 0.7 --vad-min-speech-duration-ms 200
-
-# Enable VAD for microphone processing
-vistream-asr microphone --use-vad --duration 30
-```
+| `--model.chunk-size-ms`                  | 640     | Chunk size in milliseconds (100-2000ms)                    |
+| `--model.auto-finalize-after`         | 15.0    | Maximum duration before auto-finalizing segments (seconds) |
+| `--vad.enabled`                     | False   | Enable Voice Activity Detection                            |
+| `--vad.aggressiveness`               | 3     | VAD speech probability threshold                           |
+| `--vad.min-speech-duration-ms`  | 250     | Minimum speech duration in milliseconds                    |
+| `--vad.min_silence_duration_ms` | 100     | Minimum silence duration in milliseconds                   |
+| `--vad.speech_pad_ms`           | 30      | Padding added to speech segments                           |
 
 ## Future Enhancements 🔄 PLANNED
 
@@ -393,15 +292,18 @@ vistream-asr microphone --use-vad --duration 30
 - **Real-time VAD Visualization**: Add visualization tools for VAD decisions
 - **Adaptive Thresholding**: Dynamic threshold adjustment based on noise levels
 - **Multi-speaker Support**: Extend VAD for multiple speaker detection
+- **Enhanced Error Handling**: More sophisticated error recovery mechanisms
 
 ### Medium Priority
 
 - **Custom Model Support**: Allow users to specify custom VAD models
 - **Advanced Buffering**: Implement more sophisticated buffering strategies
 - **Performance Profiling**: Built-in performance monitoring and reporting
+- **Streaming Enhancements**: More sophisticated streaming strategies and optimizations
 
 ### Low Priority
 
 - **Web Interface**: VAD configuration and monitoring via web interface
 - **Mobile Optimization**: Specific optimizations for mobile deployment scenarios
 - **Advanced Noise Cancellation**: Integration with advanced noise reduction algorithms
+- **Plugin Architecture**: Support for plugins extending functionality

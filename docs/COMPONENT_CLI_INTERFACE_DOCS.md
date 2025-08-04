@@ -1,807 +1,476 @@
-# Component: CLI Interface Documentation
-
-This document provides comprehensive documentation for the CLI Interface Component, which offers a command-line interface for ViStreamASR functionality including file transcription, real-time microphone processing, and system information.
+# CLI Interface Component Documentation
 
 ## Overview
 
-The CLI Interface Component serves as the primary user interface for ViStreamASR, providing:
+The CLI Interface component provides command-line functionality for the ViStreamASR system, handling both file transcription and microphone streaming with support for Voice Activity Detection (VAD) and hierarchical configuration management.
 
-- **File Transcription**: Process audio files with streaming ASR
-- **Real-time Microphone**: Live speech recognition from audio input devices
-- **System Information**: Library status, version, and configuration details
-- **User-friendly Output**: Formatted transcription results with progress indicators
-- **Error Handling**: Comprehensive error reporting and recovery
+## Component Responsibilities
 
-## Component Architecture
+- **Command-line argument parsing and validation**
+- **Configuration file loading and merging**
+- **Audio file transcription with progress tracking**
+- **Real-time microphone streaming**
+- **VAD integration for speech detection**
+- **Text formatting and output presentation**
+- **Error handling and user feedback**
 
-### Core Classes and Responsibilities
+## Related Classes and Files
 
-| Class/Function | Location | Primary Responsibility | Key Features |
-|----------------|----------|----------------------|-------------|
-| `main()` | [`src/cli.py:262`](src/cli.py:262) | Main CLI entry point and argument parsing | Command routing, help system |
-| `transcribe_file_streaming()` | [`src/cli.py:52`](src/cli.py:52) | File transcription with streaming ASR | Progress tracking, result formatting |
-| `transcribe_microphone_streaming()` | [`src/cli.py:147`](src/cli.py:147) | Real-time microphone transcription | Live processing, duration control |
-| `cli_main()` | [`src/cli.py:418`](src/cli.py:418) | Console script entry point | Exception handling, cleanup |
+### Primary Files
 
-## 1. Command Reference
+- **[`src/vistreamasr/cli.py`](src/vistreamasr/cli.py)** - Main CLI interface implementation
+- **[`src/vistreamasr/config.py`](src/vistreamasr/config.py)** - Configuration management
+- **[`src/vistreamasr/__init__.py`](src/vistreamasr/__init__.py)** - CLI function exports
 
-### Available Commands
+### Key Classes and Functions
 
-The CLI interface provides several commands for different use cases:
+| Function/Class         | Location                                                         | Purpose                          |
+| ---------------------- | ---------------------------------------------------------------- | -------------------------------- |
+| `transcribe_file_streaming`      | [`src/vistreamasr/cli.py:70`](src/vistreamasr/cli.py:70)         | Main file transcription function |
+| `transcribe_microphone_streaming`   | [`src/vistreamasr/cli.py:157`](src/vistreamasr/cli.py:157)       | Microphone streaming processing  |
+| `_wrap_and_print_text` | [`src/vistreamasr/cli.py:45`](src/vistreamasr/cli.py:45)         | Text formatting helper function  |
+| `setup_logging`        | [`src/vistreamasr/logging.py:60`](src/vistreamasr/logging.py:60) | Logging configuration            |
 
-#### `transcribe` - Audio File Transcription
+## Detailed Implementation
 
-```bash
-vistream-asr transcribe <audio_file> [options]
+### Core Functions
+
+#### `transcribe_file_streaming` Function
+
+**Location**: [`src/vistreamasr/cli.py:70`](src/vistreamasr/cli.py:70)
+
+**Purpose**: Main function for transcribing audio files with comprehensive configuration support and VAD integration.
+
+**Parameters**:
+
+- `audio_file` (str): Path to the audio file to transcribe
+- `settings` (ViStreamASRSettings): Configuration object
+
+**Key Features**:
+
+- **Hierarchical Configuration**: Supports TOML files, environment variables, and CLI arguments
+- **VAD Integration**: Optional Voice Activity Detection for improved accuracy
+- **Progress Tracking**: Real-time progress indicators with timing information
+- **Error Handling**: Comprehensive error handling with user-friendly messages
+- **Debug Mode**: Detailed logging for troubleshooting
+
+**Implementation Details**:
+
+```python
+def transcribe_file_streaming(
+    audio_file: str,
+    settings: ViStreamASRSettings,
+) -> str:
+    """Transcribe an audio file using ViStreamASR with VAD support."""
+    # Setup logging with configuration
+    setup_logging(settings.logging.model_dump())
+
+    # Initialize ASR with full configuration
+    asr = StreamingASR(settings=settings)
+
+    # Process with progress tracking
+    start_time = time.time()
+    total_chunks = 0
+
+    for result in asr.stream_from_file(audio_file):
+        if result['final']:
+            _wrap_and_print_text(f"Final: {result['text']}")
+
+    # Performance summary
+    processing_time = time.time() - start_time
+    _wrap_and_print_text(
+        f"Processing completed in {processing_time:.2f}s "
+    )
+
+    # Return final transcription
+    return asr.engine.state.current_transcription
 ```
 
-**Description:**
-Stream process an audio file and show real-time transcription results with partial and final segments.
+#### `transcribe_microphone_streaming` Function
 
-**Parameters:**
-- `audio_file`: Path to audio file (required) - Supports WAV, MP3, FLAC, and other torchaudio-compatible formats
+**Location**: [`src/vistreamasr/cli.py:157`](src/vistreamasr/cli.py:157)
 
-**Options:**
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--chunk-size` | 640 | Chunk size in milliseconds (100-2000ms) |
-| `--auto-finalize-after` | 15.0 | Maximum duration before auto-finalizing segments (seconds) |
-| `--show-debug` | False | Enable debug logging with detailed processing information |
+**Purpose**: Handle real-time microphone streaming with VAD support and configuration management.
 
-**Examples:**
-```bash
-# Basic file transcription
-vistream-asr transcribe audio.wav
+**Parameters**:
 
-# Custom chunk size for lower latency
-vistream-asr transcribe audio.wav --chunk-size 300
+- `duration_seconds` (float): Duration to record from microphone
+- `settings` (ViStreamASRSettings): Configuration object
 
-# Enable debug logging
-vistream-asr transcribe audio.wav --show-debug
+**Key Features**:
 
-# Custom auto-finalization timing
-vistream-asr transcribe audio.wav --auto-finalize-after 20.0
+- **Real-time Processing**: Low-latency microphone streaming
+- **VAD Integration**: Optional Voice Activity Detection for speech filtering
+- **Duration Control**: Precise recording duration management
+- **Error Handling**: Graceful handling of microphone and audio errors
+- **Debug Information**: Detailed logging for troubleshooting
+
+**Implementation Details**:
+
+```python
+def transcribe_microphone_streaming(
+    duration_seconds: float,
+    settings: ViStreamASRSettings,
+) -> None:
+    """Process audio from microphone with real-time streaming."""
+    # Setup logging
+    setup_logging(settings.logging.model_dump())
+
+    # Initialize ASR with configuration
+    asr = StreamingASR(settings=settings)
+
+    # Record from microphone
+    _wrap_and_print_text(f"Recording from microphone for {duration_seconds}s...")
+
+    try:
+        for result in asr.stream_from_microphone(duration_seconds):
+            if result['final']:
+                _wrap_and_print_text(f"Final: {result['text']}")
+    except KeyboardInterrupt:
+        _wrap_and_print_text("Recording stopped by user")
+    except Exception as e:
+        _wrap_and_print_text(f"Error during microphone processing: {e}")
+        raise
+    finally:
+        _wrap_and_print_text("Microphone processing completed")
 ```
 
-#### `microphone` - Real-time Microphone Transcription
+### Helper Functions
 
-```bash
-vistream-asr microphone [options]
+#### `_wrap_and_print_text` Helper Function
+
+**Location**: [`src/vistreamasr/cli.py:45`](src/vistreamasr/cli.py:45)
+
+**Purpose**: Enhanced text formatting and printing with consistent styling and progress tracking.
+
+**Parameters**:
+
+- `text` (str): Text to format and print
+- `width` (int): The maximum width of each line (default: 80)
+
+**Key Features**:
+
+- **Consistent Formatting**: Standardized text output format
+- **Progress Tracking**: Integration with progress indicators
+- **Escape Sequences**: Control over carriage return and line feed behavior
+- **User Experience**: Clean, readable output format
+
+**Implementation Details**:
+
+```python
+def _wrap_and_print_text(text: str, width: int = 80) -> None:
+    """Wrap and print text with consistent formatting.
+
+    Args:
+        text: Text to format and print
+        width: The maximum width of each line (default: 80)
+    """
+    # ... implementation ...
 ```
 
-**Description:**
-Record from microphone and show real-time transcription results. Press Ctrl+C to stop.
+## Configuration Integration
 
-**Options:**
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--duration` | None | Maximum recording duration in seconds (None for unlimited) |
-| `--chunk-size` | 640 | Chunk size in milliseconds (100-2000ms) |
-| `--auto-finalize-after` | 15.0 | Maximum duration before auto-finalizing segments (seconds) |
-| `--show-debug` | False | Enable debug logging with detailed processing information |
+### CLI Parameter Support
 
-**Examples:**
-```bash
-# Infinite microphone recording (press Ctrl+C to stop)
-vistream-asr microphone
+The CLI interface supports comprehensive configuration through multiple sources:
 
-# Record for 30 seconds
-vistream-asr microphone --duration 30
+| Parameter                     | Environment Variable                       | CLI Argument                    | Description                      |
+| ----------------------------- | ------------------------------------------ | ------------------------------- | -------------------------------- |
+| `model.chunk_size_ms`               | `VISTREAMASR_MODEL__CHUNK_SIZE_MS`         | `--model.chunk-size-ms`                  | Audio chunk duration             |
+| `model.auto_finalize_after`         | `VISTREAMASR_MODEL__AUTO_FINALIZE_AFTER`   | `--model.auto-finalize-after`         | Auto-finalization timeout        |
+| `vad.enabled`                 | `VISTREAMASR_VAD__ENABLED`                 | `--vad.enabled`                     | Enable VAD processing            |
+| `vad.aggressiveness`               | `VISTREAMASR_VAD__AGGRESSIVENESS`               | `--vad.aggressiveness`               | VAD speech probability threshold |
+| `vad.min_speech_duration_ms`  | `VISTREAMASR_VAD__MIN_SPEECH_DURATION_MS`  | `--vad.min-speech-duration-ms`  | Minimum speech duration          |
+| `vad.min_silence_duration_ms` | `VISTREAMASR_VAD__MIN_SILENCE_DURATION_MS` | `--vad.min-silence-duration-ms` | Minimum silence duration         |
+| `vad.speech_pad_ms`           | `VISTREAMASR_VAD__SPEECH_PAD_MS`           | `--vad.speech-pad-ms`           | Speech segment padding           |
 
-# Custom chunk size with debug
-vistream-asr microphone --chunk-size 500 --show-debug
+### Configuration Priority
+
+The configuration system follows this priority order (highest to lowest):
+
+1. **CLI Arguments** - Direct command-line overrides
+2. **Environment Variables** - System-wide configuration
+3. **Configuration File** - TOML file settings
+4. **Default Values** - Built-in sensible defaults
+
+**Example Configuration**:
+
+```toml
+# vistreamasr.toml
+[model]
+chunk_size_ms = 640
+auto_finalize_after = 15.0
+
+[vad]
+enabled = true
+aggressiveness = 3
+min_speech_duration_ms = 250
+min_silence_duration_ms = 500
+speech_pad_ms = 100
+
+[logging]
+console_log_level = "INFO"
+file_log_level = "DEBUG"
+file_path = "vistreamasr.log"
 ```
 
-#### `info` - System Information
+## VAD Integration
+
+### CLI VAD Support
+
+The CLI interface provides comprehensive VAD configuration:
+
+- **Toggle VAD**: `--vad.enabled` flag to enable/disable Voice Activity Detection
+- **Threshold Configuration**: `--vad.aggressiveness` (0-3) for speech detection sensitivity
+- **Duration Settings**: Configurable minimum speech and silence durations
+- **Padding Control**: Configurable padding around detected speech segments
+
+### VAD Workflow Integration
+
+1. **Configuration Loading**: VAD parameters loaded from hierarchical configuration
+2. **Streamer Initialization**: VAD processor created based on configuration
+3. **Audio Processing**: Audio chunks passed through VAD before ASR processing
+4. **Speech Filtering**: Only speech segments forwarded to ASR engine
+5. **Progress Reporting**: VAD decisions included in debug output when enabled
+
+**Example VAD Usage**:
 
 ```bash
-vistream-asr info
+# Enable VAD with default parameters
+vistream-asr transcribe audio.wav --vad.enabled
+
+# Custom VAD parameters
+vistream-asr transcribe audio.wav --vad.enabled --vad.aggressiveness 2 --vad.min-speech-duration-ms 200
+
+# VAD with microphone streaming
+vistream-asr microphone --vad.enabled --duration 30
 ```
 
-**Description:**
-Display library information including version, model status, cache location, and usage examples.
+## Error Handling
 
-**Output Information:**
-- Library description and version
-- Cache directory location
-- Model status (cached/download size)
-- GPU availability
-- Configuration defaults
-- Usage examples
+### Comprehensive Error Management
 
-#### `version` - Version Information
+The CLI interface includes robust error handling:
 
-```bash
-vistream-asr version
+- **File Validation**: Checks for file existence and format compatibility
+- **Configuration Validation**: Automatic parameter validation with clear error messages
+- **Audio Format Handling**: Graceful handling of unsupported audio formats
+- **Microphone Errors**: Proper handling of microphone access and recording issues
+- **Network Errors**: Handling of model download and network connectivity issues
+- **Graceful Degradation**: Fallback mechanisms when VAD or other components fail
+
+### User-Friendly Error Messages
+
+Error messages are designed to be helpful and actionable:
+
+```python
+# File not found error
+"Error: Audio file 'nonexistent.wav' not found"
+
+# Configuration validation error
+"Error: vad.aggressiveness must be between 0 and 3, got 4"
+
+# Microphone access error
+"Error: Unable to access microphone. Please check permissions."
+
+# Model loading error
+"Error: Failed to load ASR model. Please check your internet connection."
 ```
 
-**Description:**
-Show the current ViStreamASR version number.
+## Performance and Progress Tracking
 
-### Command Line Arguments
+### Progress Indicators
 
-#### Global Arguments
+The CLI interface provides real-time progress information:
 
-All commands support these global options:
+- **Chunk Processing**: Shows current chunk number and processing speed
+- **Real-Time Factor**: Displays RTF (Real-Time Factor) for performance monitoring
+- **Timing Information**: Processing time and total duration
+- **Memory Usage**: Optional memory usage display in debug mode
 
-| Argument | Description | Example |
-|----------|-------------|---------|
-| `--help`, `-h` | Show help message | `vistream-asr transcribe --help` |
-| `--version` | Show version information | `vistream-asr --version` |
+**Example Progress Output**:
 
-#### Subcommand Arguments
+```
+[ViStreamASR] Processing chunk 1... 
+[ViStreamASR] Final: This is the transcribed text
+[ViStreamASR] Processing completed in 2.34s
+```
 
-Each command has its own specific arguments as documented above.
+### Performance Metrics
 
-## 2. Usage Examples
+Key performance metrics tracked and displayed:
+
+- **Real-Time Factor (RTF)**: Ratio of processing time to audio duration
+- **Throughput**: Number of chunks processed per second
+- **Latency**: Time from audio input to text output
+- **Memory Usage**: RAM and GPU memory consumption (debug mode)
+
+## Usage Examples
 
 ### Basic File Transcription
 
 ```bash
 # Simple file transcription
-vistream-asr transcribe speech.wav
-
-# Output example:
-🎤 ViStreamASR File Transcription
-==================================================
-📁 Audio file: speech.wav
-📏 Chunk size: 640ms
-⏰ Auto-finalize after: 15.0s
-🔧 Debug mode: False
-
-🎵 Starting streaming transcription...
-==================================================
-📝 [PARTIAL   1]xin chào tôi là
-✅ [FINAL     1]xin chào tôi là john
---------------------------------------------------
-📝 [PARTIAL   2]john đến từ hà nội
-✅ [FINAL     2]john đến từ hà nội
---------------------------------------------------
-
-📊 TRANSCRIPTION RESULTS
-==================================================
-⏱️  Processing time: 3.24 seconds
-📝 Final segments: 2
-
-📝 Complete Transcription:
-==================================================
-xin chào tôi là john john đến từ hà nội
+vistream-asr transcribe audio.wav
 ```
 
-### Microphone Transcription
+### Configuration Usage
 
 ```bash
-# Real-time microphone transcription
-vistream-asr microphone --duration 10
+# Using configuration file
+vistream-asr transcribe audio.wav --config vistreamasr.toml
 
-# Output example:
-🎤 ViStreamASR Microphone Transcription
-==================================================
-🔊 Recording from microphone
-📏 Chunk size: 640ms
-⏰ Auto-finalize after: 15.0s
-⏱️ Duration: 10 seconds
-🔧 Debug mode: False
-
-🎤 Starting microphone streaming...
-🔊 Please speak into your microphone...
-==================================================
-📝 [PARTIAL   1]xin chào
-✅ [FINAL     1]xin chào
---------------------------------------------------
-📝 [PARTIAL   2]bạn có khỏe không
-✅ [FINAL     2]bạn có khỏe không
---------------------------------------------------
-
-📊 MICROPHONE TRANSCRIPTION RESULTS
-==================================================
-⏱️  Recording time: 10.02 seconds
-📝 Final segments: 2
-
-📝 Complete Transcription:
-==================================================
-xin chào bạn có khỏe không
+# Overriding configuration parameters
+vistream-asr transcribe audio.wav --model.chunk-size-ms 500
 ```
 
-### Debug Mode Usage
+### VAD Integration
 
 ```bash
-# Enable detailed debug information
-vistream-asr transcribe audio.wav --show-debug
+# Enable VAD with default parameters
+vistream-asr transcribe audio.wav --vad.enabled
 
-# Debug output includes:
-# 🔄 Initializing ViStreamASR...
-# 📊 [StreamingASR] Starting file stream: audio.wav
-# 📏 [StreamingASR] Chunk size: 640ms
-# 📁 [StreamingASR] Loading: audio.wav
-# ✅ [StreamingASR] Audio prepared: 44100 samples at 16kHz
-# ✅ [StreamingASR] Processing 7 chunks of 10240 samples each
-# 🔧 [StreamingASR] Processing chunk 1/7 (10240 samples)
-# 🔧 [ENGINE] Audio: 10240 samples | Buffer: 0 frames | is_last: False
-# ✅ [CHUNK-SIZE] Perfect size: 10240 samples (640ms)
-# 🟢 [SPEECH] Processing speech chunk...
-# 📊 [ASR] New frames - Emission: 16, Encoder: 16
-# 📝 [PARTIAL 1]xin chào
+# Custom VAD configuration
+vistream-asr transcribe audio.wav --vad.enabled --vad.aggressiveness 2
+
+# VAD with microphone streaming
+vistream-asr microphone --vad.enabled --duration 30
 ```
 
-### System Information
+### Environment Variable Usage
 
 ```bash
-# Display system information
-vistream-asr info
+# Set configuration via environment variables
+export VISTREAMASR_MODEL__CHUNK_SIZE_MS=500
+export VISTREAMASR_VAD__ENABLED=true
+export VISTREAMASR_LOGGING__CONSOLE_LOG_LEVEL=DEBUG
 
-# Output example:
-🎤 ViStreamASR - Vietnamese Streaming ASR Library
-==================================================
-📖 Description: Simple and efficient streaming ASR for Vietnamese
-🏠 Cache directory: ~/.cache/ViStreamASR
-🧠 Model: ViStreamASR (U2-based)
-🔧 Optimal chunk size: 640ms
-⏰ Default auto-finalize: 15 seconds
-🚀 GPU support: Available
-
-Usage examples:
-  vistream-asr transcribe audio.wav
-  vistream-asr transcribe audio.wav --chunk-size 500
-  vistream-asr transcribe audio.wav --auto-finalize-after 20
-  vistream-asr transcribe audio.wav --show-debug
-  vistream-asr microphone
-  vistream-asr microphone --duration 30
-  vistream-asr microphone --chunk-size 500
-  vistream-asr microphone --show-debug
-
-💾 Model status: Cached (2.7 GB)
+# Run with environment configuration
+vistream-asr transcribe audio.wav
 ```
 
-## 3. Error Handling and Troubleshooting
+## Integration with Other Components
 
-### Common Error Scenarios
+### Streaming Interface Integration
 
-#### File Not Found Errors
+The CLI component integrates seamlessly with the streaming interface:
 
-```bash
-$ vistream-asr transcribe missing_file.wav
-❌ Error: Audio file not found: missing_file.wav
-```
+- **StreamingASR**: Uses StreamingASR as the main transcription engine
+- **Configuration**: Passes configuration settings to streaming components
+- **VAD Processing**: Integrates VAD through the streaming interface
+- **State Management**: Leverages ASRState for transcription state tracking
 
-**Solution:** Verify file path exists and is accessible.
+### Configuration System Integration
 
-#### Microphone Device Issues
+- **ViStreamASRSettings**: Uses the centralized configuration object
+- **Validation**: Inherits parameter validation from configuration system
+- **Logging**: Integrates with structured logging system
+- **Environment Variables**: Supports environment variable overrides
 
-```bash
-$ vistream-asr microphone
-❌ Error: No microphone devices found
-```
+### Core Processing Integration
 
-**Solution:** 
-- Check microphone connections
-- Verify permissions (especially on macOS/Linux)
-- Install required dependencies: `pip install sounddevice`
+- **ASREngine**: Uses ASREngine for actual speech recognition processing
+- **Model Management**: Leverages model loading and caching mechanisms
+- **Audio Processing**: Integrates with audio preprocessing pipeline
+- **State Management**: Uses ASRState for maintaining transcription context
 
-#### Missing Dependencies
+## API Reference
 
-```bash
-$ vistream-asr transcribe audio.wav
-❌ Error: sounddevice library not installed. Install with: pip install sounddevice
-```
+### Public Functions
 
-**Solution:** Install required dependencies:
-```bash
-pip install sounddevice torchaudio numpy torch
-```
+#### `transcribe_file_streaming(audio_file, settings)`
 
-#### Model Download Issues
-
-```bash
-$ vistream-asr transcribe audio.wav
-❌ Error: Failed to download model from https://...
-```
+Transcribe an audio file using ViStreamASR with VAD support.
 
-**Solution:**
-- Check internet connection
-- Verify Hugging Face model access
-- Clear cache: `rm -rf ~/.cache/ViStreamASR/`
+**Parameters**:
 
-### Debug Mode for Troubleshooting
+- `audio_file` (str): Path to the audio file to transcribe
+- `settings` (ViStreamASRSettings): Configuration object
 
-Enable debug mode to diagnose issues:
+**Returns**:
 
-```bash
-# File processing with debug
-vistream-asr transcribe audio.wav --show-debug
-
-# Microphone processing with debug
-vistream-asr microphone --show-debug
-```
-
-**Debug Information Provided:**
-- Model loading status
-- Audio file processing details
-- Chunk processing information
-- Buffer management status
-- Performance metrics (RTF, processing time)
-- Error stack traces when applicable
-
-### Performance Issues
-
-#### High Latency
-
-**Symptom:** Transcription results appear significantly delayed after speech.
-
-**Solutions:**
-```bash
-# Reduce chunk size for lower latency
-vistream-asr transcribe audio.wav --chunk-size 300
-
-# Enable GPU acceleration (if available)
-# System automatically detects and uses GPU
-```
-
-#### Memory Issues
-
-**Symptom:** Program crashes with memory errors on large files.
-
-**Solutions:**
-```bash
-# Use smaller chunk sizes to reduce memory usage
-vistream-asr transcribe large_audio.wav --chunk-size 500
-
-# Process in shorter segments for very long files
-# Split file and process individually
-```
-
-#### Audio Quality Issues
-
-**Symptom:** Poor transcription accuracy or garbled output.
-
-**Solutions:**
-```bash
-# Check audio file integrity
-# Ensure proper sample rate (16kHz recommended)
-vistream-asr transcribe audio.wav --show-debug  # Check audio preparation
-```
-
-## 4. Command Implementation Details
-
-### Main Entry Point
-
-The CLI interface uses a structured argument parsing approach:
-
-```python
-def main():
-    """Main CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="ViStreamASR - Vietnamese Streaming ASR Transcription",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s transcribe audio.wav                                    # Basic file transcription
-  %(prog)s transcribe audio.wav --chunk-size 640                  # Use 640ms chunks
-  %(prog)s transcribe audio.wav --show-debug                      # Enable debug logging
-  
-  %(prog)s microphone                                              # Record from microphone indefinitely
-  %(prog)s microphone --duration 30                               # Record for 30 seconds
-  %(prog)s microphone --chunk-size 500 --show-debug               # Custom settings with debug
-        """
-    )
-    
-    # Subcommands setup
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
-    
-    # Configure each subcommand
-    # ... (transcribe, microphone, info, version subparsers)
-```
-
-### Command Routing
-
-The system routes commands to appropriate handlers:
-
-```python
-args = parser.parse_args()
-
-if args.command == 'transcribe':
-    return transcribe_file_streaming(
-        args.audio_file, 
-        chunk_size_ms=args.chunk_size,
-        auto_finalize_after=args.auto_finalize_after,
-        debug=args.show_debug
-    )
-    
-elif args.command == 'microphone':
-    return transcribe_microphone_streaming(
-        duration_seconds=args.duration,
-        chunk_size_ms=args.chunk_size,
-        auto_finalize_after=args.auto_finalize_after,
-        debug=args.show_debug
-    )
-    
-elif args.command == 'info':
-    # Display system information
-    return 0
-    
-elif args.command == 'version':
-    # Show version information
-    return 0
-```
-
-### File Transcription Implementation
-
-The file transcription function provides comprehensive feedback:
-
-```python
-def transcribe_file_streaming(audio_file, chunk_size_ms=640, auto_finalize_after=15.0, debug=False):
-    """
-    Transcribe an audio file using streaming ASR.
-    """
-    print(f"{symbols['mic']} ViStreamASR File Transcription")
-    print("=" * 50)
-    print(f"{symbols['folder']} Audio file: {audio_file}")
-    print(f"{symbols['ruler']} Chunk size: {chunk_size_ms}ms")
-    print(f"{symbols['clock']} Auto-finalize after: {auto_finalize_after}s")
-    print(f"{symbols['tool']} Debug mode: {debug}")
-    print()
-    
-    if not os.path.exists(audio_file):
-        print(f"❌ Error: Audio file not found: {audio_file}")
-        return 1
-    
-    # Initialize StreamingASR
-    print(f"🔄 Initializing ViStreamASR...")
-    asr = StreamingASR(
-        chunk_size_ms=chunk_size_ms, 
-        auto_finalize_after=auto_finalize_after,
-        debug=debug
-    )
-```
-
-### Microphone Transcription Implementation
-
-The microphone transcription includes robust device detection:
-
-```python
-def transcribe_microphone_streaming(duration_seconds=None, chunk_size_ms=640, auto_finalize_after=15.0, debug=False):
-    """
-    Transcribe from microphone using streaming ASR.
-    """
-    # Check if microphone is available
-    try:
-        import sounddevice as sd
-        devices = sd.query_devices()
-        input_devices = [d for d in devices if d['max_input_channels'] > 0]
-        if not input_devices:
-            print(f"❌ Error: No microphone devices found")
-            return 1
-        print(f"{symbols['check']} Found {len(input_devices)} microphone device(s)")
-    except ImportError:
-        print(f"❌ Error: sounddevice library not installed. Install with: pip install sounddevice")
-        return 1
-    except Exception as e:
-        print(f"❌ Error checking microphone: {e}")
-        return 1
-```
-
-## 5. Output Formatting
-
-### Visual Indicators
-
-The CLI uses consistent visual symbols for different types of information:
-
-| Symbol | Meaning | Usage |
-|--------|---------|-------|
-| 🎤 | Microphone/ASR | Main interface indicator |
-| 📁 | File operations | Audio file paths |
-| 📏 | Size/Configuration | Chunk sizes, durations |
-| ⏰ | Time operations | Auto-finalize timing |
-| 🔧 | Configuration | Debug mode, settings |
-| ✅ | Success | Final transcriptions, completion |
-| 📝 | Text content | Partial and final transcriptions |
-| 📊 | Statistics | Performance metrics |
-| ❌ | Errors | Error conditions |
-| 🔄 | Processing | Initialization, model loading |
-| 🚀 | GPU acceleration | GPU availability status |
-
-### Output Structure
-
-#### File Transcription Output
-
-```
-🎤 ViStreamASR File Transcription
-==================================================
-📁 Audio file: speech.wav
-📏 Chunk size: 640ms
-⏰ Auto-finalize after: 15.0s
-🔧 Debug mode: False
-
-🎵 Starting streaming transcription...
-==================================================
-📝 [PARTIAL   1]xin chào tôi là
-✅ [FINAL     1]xin chào tôi là john
---------------------------------------------------
-📝 [PARTIAL   2]john đến từ hà nội
-✅ [FINAL     2]john đến từ hà nội
---------------------------------------------------
-
-📊 TRANSCRIPTION RESULTS
-==================================================
-⏱️  Processing time: 3.24 seconds
-📝 Final segments: 2
-
-📝 Complete Transcription:
-==================================================
-xin chào tôi là john john đến từ hà nội
-```
-
-#### Microphone Transcription Output
-
-```
-🎤 ViStreamASR Microphone Transcription
-==================================================
-🔊 Recording from microphone
-📏 Chunk size: 640ms
-⏰ Auto-finalize after: 15.0s
-⏱️ Duration: 10 seconds
-🔧 Debug mode: False
-
-🎤 Starting microphone streaming...
-🔊 Please speak into your microphone...
-==================================================
-📝 [PARTIAL   1]xin chào
-✅ [FINAL     1]xin chào
---------------------------------------------------
-📝 [PARTIAL   2]bạn có khỏe không
-✅ [FINAL     2]bạn có khỏe không
---------------------------------------------------
-
-📊 MICROPHONE TRANSCRIPTION RESULTS
-==================================================
-⏱️  Recording time: 10.02 seconds
-📝 Final segments: 2
-
-📝 Complete Transcription:
-==================================================
-xin chào bạn có khỏe không
-```
-
-### Progress Tracking
-
-The CLI provides detailed progress information:
-
-- **Chunk Progress**: `[PARTIAL X/Y]` and `[FINAL X/Y]` indicators
-- **Processing Statistics**: Total time, RTF, speedup factors
-- **Audio Information**: Sample counts, durations, chunk sizes
-- **System Status**: Model loading, device detection, GPU availability
-
-## 6. Configuration and Customization
-
-### Environment Variables
-
-The CLI can be configured through environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VISTREAMASR_DEBUG` | False | Enable debug mode globally |
-| `VISTREAMASR_CHUNK_SIZE` | 640 | Default chunk size in ms |
-| `VISTREAMASR_CACHE_DIR` | ~/.cache/ViStreamASR | Model cache directory |
-
-### Configuration File Support
-
-Create a `~/.vistreamasr.conf` file for persistent configuration:
-
-```ini
-[default]
-chunk_size = 640
-auto_finalize_after = 15.0
-debug = false
-
-[microphone]
-default_duration = 30
-chunk_size = 640
-
-[file]
-max_file_size = 100MB
-supported_formats = wav,mp3,flac,m4a
-```
-
-### Custom Themes and Formatting
-
-The CLI supports customizable output formatting through configuration:
-
-```python
-# Custom color scheme (if terminal supports colors)
-color_schemes = {
-    'dark': {
-        'partial': '\033[94m',    # Blue
-        'final': '\033[92m',      # Green  
-        'error': '\033[91m',      # Red
-        'reset': '\033[0m'
-    },
-    'light': {
-        'partial': '\033[94m',    # Blue
-        'final': '\033[92m',      # Green
-        'error': '\033[91m',      # Red
-        'reset': '\033[0m'
-    }
-}
-```
-
-## 7. Integration Patterns
-
-### Shell Script Integration
-
-The CLI can be easily integrated into shell scripts:
-
-```bash
-#!/bin/bash
-# transcribe_script.sh
-
-# Check if file exists
-if [ ! -f "$1" ]; then
-    echo "Error: File '$1' not found"
-    exit 1
-fi
-
-# Transcribe file and save results
-result=$(vistream-asr transcribe "$1" --chunk-size 500)
-echo "$result" > transcription.txt
-
-# Extract just the transcription text
-grep "Complete Transcription:" transcription.txt | tail -1 | cut -d' ' -f3- > final_text.txt
-```
-
-### Pipeline Integration
-
-The CLI works well with Unix pipelines:
-
-```bash
-# Process multiple files
-for file in *.wav; do
-    echo "Processing $file..."
-    vistream-asr transcribe "$file" --chunk-size 300
-done
-
-# Process audio stream from another program
-arecord -f cd -c 1 -r 16000 | vistream-asr microphone --duration 30
-```
-
-### System Service Integration
-
-Create a systemd service for continuous transcription:
-
-```ini
-# /etc/systemd/system/vistreamasr.service
-[Unit]
-Description=ViStreamASR Transcription Service
-After=sound.target
-
-[Service]
-Type=simple
-User=asr
-ExecStart=/usr/local/bin/vistream-asr microphone --duration 3600
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## 8. Performance Optimization
-
-### Chunk Size Optimization
-
-Choose appropriate chunk sizes based on use case:
-
-| Use Case | Recommended Chunk Size | Latency | Accuracy |
-|----------|----------------------|---------|----------|
-| Real-time chat | 200-300ms | Very low | Good |
-| Meeting transcription | 500-640ms | Low | Very good |
-| High accuracy | 1000-2000ms | Medium | Excellent |
-| Low bandwidth | 300-500ms | Low | Good |
-
-### Memory Optimization
-
-For large files or limited memory:
-
-```bash
-# Use smaller chunks to reduce memory usage
-vistream-asr transcribe large_file.wav --chunk-size 400
-
-# Process in segments for very large files
-ffmpeg -i large_file.wav -f segment -segment_time 30 -c copy chunk_%03d.wav
-for chunk in chunk_*.wav; do
-    vistream-asr transcribe "$chunk"
-done
-```
-
-### GPU Acceleration
-
-The CLI automatically detects and uses GPU acceleration:
-
-```bash
-# Check GPU availability
-vistream-asr info
-
-# GPU will be used automatically if available
-# No additional configuration required
-```
-
-## 9. Advanced Usage
-
-### Batch Processing
-
-Process multiple files with a script:
-
-```bash
-#!/bin/bash
-# batch_transcribe.sh
-
-for file in "$@"; do
-    echo "Processing: $file"
-    output_file="${file%.*}.txt"
-    vistream-asr transcribe "$file" > "$output_file"
-    echo "Results saved to: $output_file"
-done
-```
-
-### Quality Assessment
-
-Evaluate transcription quality:
-
-```bash
-# Compare with reference text
-reference="reference.txt"
-transcription="output.txt"
-
-# Calculate word error rate (requires wer-calc tool)
-wer-calc "$reference" "$transcription"
-
-# Or use simple word count comparison
-ref_words=$(wc -w < "$reference")
-trans_words=$(wc -w < "$transcription")
-echo "Reference words: $ref_words"
-echo "Transcription words: $trans_words"
-```
-
-### Custom Output Formats
-
-Extract specific information from CLI output:
-
-```bash
-# Extract just the final transcription
-vistream-asr transcribe audio.wav | \
-    grep "Complete Transcription:" | \
-    tail -1 | \
-    cut -d' ' -f3- > clean_transcription.txt
-
-# Extract processing statistics
-vistream-asr transcribe audio.wav | \
-    grep "Processing time:" | \
-    cut -d' ' -f3 | \
-    tr -d 's' > processing_time.txt
-```
-
-## 10. Summary
-
-The CLI Interface Component provides a comprehensive, user-friendly command-line interface for ViStreamASR with:
-
-- **Multiple Commands**: File transcription, microphone recording, system information
-- **Rich Output**: Formatted results with progress indicators and visual feedback
-- **Error Handling**: Comprehensive error reporting and troubleshooting guidance
-- **Performance Optimization**: Configurable parameters for different use cases
-- **Integration Ready**: Designed for shell scripts, pipelines, and system services
-- **User-friendly**: Clear help system, examples, and intuitive parameter names
-
-The component successfully abstracts the complexity of the underlying streaming ASR system while providing powerful command-line tools suitable for both casual users and automation scripts.
-
-## Related Files
-
-- **[`src/cli.py`](src/cli.py)**: Main CLI implementation
-- **[`src/streaming.py`](src/streaming.py)**: Streaming interface used by CLI
-- **[`src/core.py`](src/core.py)**: Core ASR engine powering the CLI
-
-## Dependencies
-
-- **argparse**: Command-line argument parsing
-- **sounddevice**: Microphone input for real-time processing
-- **torchaudio**: Audio file loading and processing
-- **torch**: Underlying deep learning framework
-- **numpy**: Numerical computations
+- `str`: Final transcription text
+
+**Raises**:
+
+- `ValueError`: If file doesn't exist or is invalid
+- `RuntimeError`: If ASR processing fails
+
+#### `transcribe_microphone_streaming(duration_seconds, settings)`
+
+Process audio from microphone with real-time streaming.
+
+**Parameters**:
+
+- `duration_seconds` (float): Duration to record from microphone
+- `settings` (ViStreamASRSettings): Configuration object
+
+**Raises**:
+
+- `ValueError`: If duration is invalid
+- `RuntimeError`: If microphone access fails
+- `KeyboardInterrupt`: If user stops recording
+
+### Helper Functions
+
+#### `_wrap_and_print_text(text, width=80)`
+
+Wrap and print text with consistent formatting.
+
+**Parameters**:
+
+- `text` (str): Text to format and print
+- `width` (int): The maximum width of each line (default: 80)
+
+**Returns**:
+
+- None
+
+## Testing and Validation
+
+### Unit Tests
+
+The CLI interface includes comprehensive unit tests:
+
+- **Configuration Loading**: Tests for hierarchical configuration parsing
+- **Parameter Validation**: Tests for parameter validation and error handling
+- **File Processing**: Tests for file transcription functionality
+- **VAD Integration**: Tests for VAD configuration and processing
+- **Error Handling**: Tests for error scenarios and graceful degradation
+
+### Integration Tests
+
+Integration tests cover:
+
+- **End-to-End Workflow**: Complete file transcription workflow
+- **Configuration Integration**: Integration with configuration system
+- **VAD Integration**: Integration with VAD processing
+- **Streaming Interface**: Integration with streaming components
+- **Logging Integration**: Integration with structured logging
+
+### Performance Tests
+
+Performance validation includes:
+
+- **Processing Speed**: Measurement of transcription throughput
+- **Memory Usage**: Monitoring of memory consumption during processing
+- **Real-Time Performance**: Validation of real-time processing capabilities
+- **VAD Overhead**: Measurement of VAD processing impact on performance
+
+## Future Enhancements
+
+### Planned Improvements
+
+- **Enhanced Progress Indicators**: More sophisticated progress visualization
+- **Batch Processing**: Support for processing multiple files in batch
+- **Advanced Configuration**: More granular configuration options
+- **Plugin System**: Support for CLI plugins and extensions
+- **Output Formatting**: Multiple output format options (JSON, CSV, etc.)
+
+### Potential Extensions
+
+- **Web Interface**: CLI integration with web-based monitoring
+- **Mobile Support**: CLI functionality for mobile deployment
+- **Cloud Integration**: Integration with cloud storage and processing
+- **Advanced Analytics**: Performance analytics and reporting
+- **Custom Models**: Support for custom ASR and VAD models

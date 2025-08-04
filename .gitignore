@@ -92,18 +92,18 @@ ipython_config.py
 #   However, in case of collaboration, if having platform-specific dependencies or dependencies
 #   having no cross-platform support, pipenv may install dependencies that don't work, or not
 #   install all needed dependencies.
-Pipfile.lock
+# Pipfile.lock # Commenting out as it's often included, but left for reference
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
 #   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-poetry.lock
+# poetry.lock # Commenting out as it's often included, but left for reference
 
 # pdm
 #   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-pdm.lock
+# pdm.lock # Commenting out as it's often included, but left for reference
 #   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
 #   in version control.
 #   https://pdm.fming.dev/#use-with-ide
@@ -147,8 +147,6 @@ dmypy.json
 .pyre/
 
 # pytype static type analyzer
-# Vagrant
-.vagrant
 .pytype/
 
 # Cython debug symbols
@@ -160,7 +158,23 @@ cython_debug/
 #  project, it is recommended to include .idea directory in version control.
 # .idea/
 
-# Machine Learning specific
+# --- Project Specific ---
+
+# pixi environments and lock file
+.pixi/*
+!.pixi/config.toml
+# pixi.lock # Often committed, uncomment to ignore if desired
+
+# uv lock file
+# uv.lock # Often committed, uncomment to ignore if desired
+
+# Third-party libraries (e.g., git submodules or copied sources)
+WhisperLiveKit/
+
+# Model storage
+models/
+
+# Machine Learning specific (general)
 *.pkl
 *.joblib
 *.h5
@@ -175,9 +189,9 @@ cython_debug/
 
 # Model cache directories
 .cache/
-~/.cache/ViStreamASR/
+~/.cache/ViStreamASR/ # Or a more generic model cache path if applicable
 
-# Data files (too large for git)
+# Data files (too large for git, general)
 *.wav
 *.mp3
 *.mp4
@@ -189,22 +203,16 @@ cython_debug/
 *.m4a
 *.aac
 
-# Allow specific demo files
-!resource/*.wav
-!resource/*.mp3
+# Allow specific demo files (if any, adjust path as needed)
+# !resource/*.wav
+# !resource/*.mp3
+
+# --- General ---
 
 # Temporary files
 *.tmp
 *.temp
 *~
-.DS_Store
-Thumbs.db
-
-# IDE specific
-.vscode/
-.idea/
-*.swp
-*.swo
 
 # OS specific
 .DS_Store
@@ -215,21 +223,8 @@ Thumbs.db
 ehthumbs.db
 Thumbs.db
 
-# pixi environments
-.pixi/*
-!.pixi/config.toml
-
-# Editors
+# IDE specific (can be global or project-specific)
 .vscode/
 .idea/
-
-# Mac/OSX
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-
-# Windows
-Thumbs.db
-ehthumbs.db
+*.swp
+*.swo

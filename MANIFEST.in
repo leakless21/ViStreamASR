@@ -2,7 +2,7 @@ include README.md
 include LICENSE
 include requirements.txt
 include pyproject.toml
-include setup.py
+
 
 # Include source code
 recursive-include src *.py

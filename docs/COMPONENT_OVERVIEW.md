@@ -1,232 +1,497 @@
-# Component Overview: ViStreamASR
+# ViStreamASR Component Overview
 
-This document provides a comprehensive overview of the ViStreamASR system architecture, components, and their relationships. The system is designed for real-time, streaming automatic speech recognition with optimized performance and user-friendly interfaces.
+## System Architecture Overview
 
-## System Architecture
+ViStreamASR is a modular, extensible Vietnamese Automatic Speech Recognition system that has been refactored to implement Domain-Driven Design principles with clear separation of concerns. The system architecture follows a layered approach with specialized components for different functional areas.
 
-ViStreamASR is a modular streaming ASR system composed of four main components:
+### Architecture Principles
 
-1. **Core Processing Component** - The heart of the system handling ASR engine functionality
-2. **Streaming Interface Component** - High-level user-facing API for streaming speech recognition
-3. **CLI Interface Component** - Command-line interface for file transcription and real-time processing
-4. **Architecture Framework** - Overall system design and deployment considerations
+The refactored system is built on several key architectural principles:
 
-## Component Relationships
+- **Domain-Driven Design**: Clear separation of business domains and technical concerns
+- **Facade Pattern**: Simplified interfaces through facade components
+- **Separation of Concerns**: Each component has a single, well-defined responsibility
+- **Modularity**: Components are loosely coupled and independently testable
+- **Configuration-Driven**: Centralized configuration management
+- **Error Resilience**: Graceful error handling and recovery mechanisms
 
-```mermaid
-graph TD
-    A[CLI Interface] -->|Uses| B[Streaming Interface]
-    B -->|Uses| C[Core Processing]
-    C -->|Depends on| D[Models & Frameworks]
-    
-    subgraph "User Interfaces"
-        A[CLI Interface]
-        B[Streaming Interface]
-    end
-    
-    subgraph "Core Engine"
-        C[Core Processing]
-    end
-    
-    subgraph "External Dependencies"
-        D[Models & Frameworks]
-    end
+### Component Architecture
+
+The system is organized into the following main components:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ViStreamASR System                        │
+├─────────────────────────────────────────────────────────────┤
+│  CLI Interface Component                                    │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  transcribe_file()  │  process_microphone()             │ │
+│  │  _wrap_and_print_text()                                 │ │
+│  └─────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│  Streaming Interface Component                              │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  StreamingASR (Facade)                                  │ │
+│  │  ├─ FileStreamer                                        │ │
+│  │  └─ MicrophoneStreamer                                  │ │
+│  └─────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│  Core Processing Component                                  │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  ASREngine                                              │ │
+│  │  ├─ ASRState                                            │ │
+│  │  ├─ _pad_tensor_list()                                  │ │
+│  │  ├─ FINAL_CHUNK_PADDING_SAMPLES                         │ │
+│  │  └─ MINIMUM_CHUNK_SIZE_SAMPLES                          │ │
+│  └─────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│  Configuration Management Component                         │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  ViStreamASRSettings                                    │ │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐        │ │
+│  │  │   Model     │ │     VAD     │ │   Logging   │        │ │
+│  │  │  Settings   │ │   Settings  │ │   Settings  │        │ │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘        │ │
+│  └─────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│  Voice Activity Detection Component                         │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  VADProcessor                                           │ │
+│  │  ┌─────────────────────────────────────────────────────┐ │ │
+│  │  │  VADASRCoordinator                                  │ │ │
+│  │  └─────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Responsibilities
 
-### Core Processing Component
-- **Location**: [`src/core.py`](src/core.py:1)
-- **Primary Responsibility**: ASR engine initialization, model management, audio processing, and decoding mechanics
-- **Key Classes**: 
-  - [`ASREngine`](src/core.py:432) - Core ASR logic management
-  - [`IncrementalASR`](src/core.py:346) - Incremental audio processing
-- **Features**: Model caching, two-pass decoding, GPU acceleration, error handling
+### 1. CLI Interface Component
 
-### Streaming Interface Component
-- **Location**: [`src/streaming.py`](src/streaming.py:1)
-- **Primary Responsibility**: High-level streaming interface for both file and microphone input
-- **Key Classes**: 
-  - [`StreamingASR`](src/streaming.py:45) - Main streaming interface
-- **Features**: Audio format handling, real-time processing, result management
+**Primary Responsibility**: Provide command-line interface for end users
 
-### CLI Interface Component
-- **Location**: [`src/cli.py`](src/cli.py:1)
-- **Primary Responsibility**: Command-line interface for file transcription and microphone recording
-- **Key Functions**: 
-  - [`transcribe_file_streaming()`](src/cli.py:52) - File transcription
-  - [`transcribe_microphone_streaming()`](src/cli.py:147) - Real-time microphone processing
-- **Features**: Progress tracking, error handling, formatted output
+**Key Functions**:
 
-## Key Features and Capabilities
+- **File Transcription**: Process audio files and generate transcriptions
+- **Microphone Streaming**: Real-time speech recognition from microphone input
+- **Configuration Management**: Load and merge configuration from multiple sources
+- **Progress Tracking**: Display progress indicators and performance metrics
+- **Error Handling**: User-friendly error messages and recovery suggestions
+- **Text Formatting**: Consistent output formatting with `_wrap_and_print_text` helper
 
-### Streaming Capabilities
-- **Real-time Processing**: Low-latency streaming with configurable chunk sizes (100-2000ms)
-- **File Streaming**: Process audio files in streaming mode with partial and final results
-- **Microphone Streaming**: Live speech recognition from audio input devices
-- **Incremental Processing**: Context-preserving audio processing for improved accuracy
+**Related Classes**:
 
-### Performance Optimizations
-- **GPU Acceleration**: Automatic detection and utilization of GPU when available
-- **Model Caching**: Efficient model caching to avoid repeated downloads
-- **Memory Management**: Optimized buffer management for large audio files
-- **RTF Monitoring**: Real-time factor tracking for performance analysis
+- [`transcribe_file()`](src/vistreamasr/cli.py:70) - Main file transcription function
+- [`process_microphone()`](src/vistreamasr/cli.py:191) - Microphone streaming function
+- [`_wrap_and_print_text()`](src/vistreamasr/cli.py:45) - Text formatting helper
 
-### Audio Processing
-- **Format Support**: WAV, MP3, FLAC, OGG, M4A and more via torchaudio
-- **Sample Rate Conversion**: Automatic resampling to 16kHz optimal rate
-- **Channel Reduction**: Stereo to mono conversion
-- **Normalization**: Amplitude normalization to [-1, 1] range
+### 2. Streaming Interface Component
 
-### Language Model Integration
-- **Two-Pass Decoding**: N-gram beam search followed by CLM beam ranking
-- **Bidirectional Processing**: Forward and backward encoder outputs for improved accuracy
-- **Hypothesis Reranking**: Dynamic reranking based on language model scores
-- **Context Preservation**: Maintains context across audio chunks
+**Primary Responsibility**: Provide unified interface for audio streaming operations
 
-## Technical Specifications
+**Key Functions**:
 
-### System Requirements
-- **Python**: 3.8+
-- **Memory**: ~5GB RAM for model and processing buffers
-- **Storage**: ~2.7GB for cached models
-- **GPU**: Optional (recommended for lower latency)
+- **Facade Pattern**: Simplified interface through StreamingASR facade
+- **File Streaming**: Specialized handling for file-based audio processing
+- **Microphone Streaming**: Specialized handling for real-time microphone input
+- **VAD Integration**: Seamless Voice Activity Detection support
+- **State Management**: Maintain streaming context and state
+- **Configuration Propagation**: Pass configuration to specialized components
 
-### Performance Metrics
-- **Target RTF**: 0.3-0.4x (3-4x faster than real-time on CPU)
-- **GPU Acceleration**: 2-5x improvement over CPU
-- **Default Latency**: ~640ms with standard chunk settings
-- **Audio Quality**: 16kHz sample rate, 16-bit depth
+**Related Classes**:
 
-### Configuration Parameters
-| Parameter | Default Value | Description |
-|-----------|---------------|-------------|
-| `chunk_size_ms` | 640ms | Audio chunk duration |
-| `max_duration_before_forced_finalization` | 15.0s | Maximum segment duration |
-| `decoding_chunk_size` | 16 frames | Processing window size |
-| `reverse_weight` | 0.3 | Bidirectional influence |
-| `beam_size` | 100 | Beam search width |
+- [`StreamingASR`](src/vistreamasr/streaming.py:339) - Main facade class
+- [`FileStreamer`](src/vistreamasr/streaming.py:31) - File streaming specialist
+- [`MicrophoneStreamer`](src/vistreamasr/streaming.py:231) - Microphone streaming specialist
 
-## Usage Patterns
+### 3. Core Processing Component
 
-### File Processing
-```python
-from streaming import StreamingASR
+**Primary Responsibility**: Handle fundamental speech recognition processing
 
-# Initialize and process audio file
-asr = StreamingASR()
-for result in asr.stream_from_file("audio.wav"):
-    if result['partial']:
-        print(f"Partial: {result['text']}")
-    if result['final']:
-        print(f"Final: {result['text']}")
+**Key Functions**:
+
+- **Model Management**: Load, cache, and manage speech recognition models
+- **Audio Processing**: Process audio chunks and generate transcriptions
+- **State Management**: Maintain transcription state and context
+- **Performance Optimization**: Ensure real-time processing capabilities
+- **Error Handling**: Robust error handling and recovery mechanisms
+- **Helper Functions**: Provide utility functions for common operations
+
+**Related Classes**:
+
+- [`ASREngine`](src/vistreamasr/core.py:459) - Main speech recognition engine
+- [`ASRState`](src/vistreamasr/core.py:440) - State management class
+- [`_pad_tensor_list()`](src/vistreamasr/core.py:67) - Tensor padding helper
+- [`FINAL_CHUNK_PADDING_SAMPLES`](src/vistreamasr/core.py:35) - Named constant
+- [`MINIMUM_CHUNK_SIZE_SAMPLES`](src/vistreamasr/core.py:36) - Named constant
+
+### 4. Configuration Management Component
+
+**Primary Responsibility**: Provide centralized configuration management
+
+**Key Functions**:
+
+- **Hierarchical Configuration**: Support for nested configuration structure
+- **Multiple Sources**: Configuration from files, environment variables, and CLI
+- **Parameter Validation**: Automatic validation with clear error messages
+- **Type Safety**: Use of Pydantic for type-safe configuration management
+- **Default Values**: Sensible defaults for all parameters
+- **Environment Integration**: Support for environment variable overrides
+
+**Related Classes**:
+
+- [`ViStreamASRSettings`](src/vistreamasr/config.py:16) - Main configuration class
+- [`ModelSettings`](src/vistreamasr/config.py:39) - Model configuration
+- [`VADSettings`](src/vistreamasr/config.py:56) - VAD configuration
+- [`LoggingSettings`](src/vistreamasr/config.py:72) - Logging configuration
+
+### 5. Voice Activity Detection Component
+
+**Primary Responsibility**: Detect speech segments in audio streams
+
+**Key Functions**:
+
+- **Speech Detection**: Identify speech segments with configurable thresholds
+- **Real-time Processing**: Process audio chunks in real-time
+- **Configuration Support**: Comprehensive parameter configuration
+- **Integration**: Seamless integration with ASR pipeline
+- **Error Handling**: Graceful handling of detection errors
+- **Performance**: Optimized for Vietnamese speech characteristics
+
+**Related Classes**:
+
+- [`VADProcessor`](src/vistreamasr/vad.py:16) - Main VAD processing class
+- [`VADASRCoordinator`](src/vistreamasr/vad.py:285) - VAD-ASR integration class
+
+## Data Flow Architecture
+
+### Main Processing Flow
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Audio Input   │───▶│  Streaming      │───▶│   Core          │
+│                 │    │   Interface     │    │   Processing    │
+│                 │    │                 │    │                 │
+│ • Audio Files   │    │ • FileStreamer  │    │ • ASREngine     │
+│ • Microphone    │    │ • Microphone    │    │ • ASRState      │
+│                 │    │   Streamer      │    │ • Model Loading │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                        │
+                                                        ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Text Output   │◀───│  Configuration  │◀───│   VAD           │
+│                 │    │   Management    │    │   Processing    │
+│                 │    │                 │    │                 │
+│ • Transcription │    │ • Settings      │    │ • VADProcessor  │
+│ • Progress      │    │ • Validation    │    │ • Speech        │
+│ • Performance   │    │ • Defaults      │    │   Detection     │
+│                 │    │                 │    │ • Integration   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-### Real-time Processing
-```python
-# Real-time microphone transcription
-asr = StreamingASR()
-for result in asr.stream_from_microphone():
-    print(f"Transcription: {result['text']}")
-```
+### Detailed Data Flow
 
-### CLI Usage
-```bash
-# File transcription
-vistream-asr transcribe audio.wav
+1. **Input Stage**:
 
-# Real-time microphone
-vistream-asr microphone --duration 30
+   - CLI receives file path or microphone input
+   - Configuration loaded from multiple sources
+   - Streaming interface initialized with configuration
 
-# System information
-vistream-asr info
-```
+2. **Processing Stage**:
+
+   - Audio chunks processed through specialized streamers
+   - VAD filtering applied if enabled
+   - Core processing generates transcriptions
+   - State maintained throughout processing
+
+3. **Output Stage**:
+   - Transcription results formatted and displayed
+   - Performance metrics calculated and shown
+   - State summary provided for long-form processing
 
 ## Integration Points
 
-### API Integration
-- **Web Applications**: WebSocket support for real-time transcription
-- **Desktop Applications**: Threading support for background processing
-- **Mobile Applications**: Audio streaming via HTTP/WebRTC
+### 1. Configuration Integration
 
-### System Integration
-- **Shell Scripts**: Command-line interface for automation
-- **Pipelines**: Unix pipeline support for batch processing
-- **System Services**: systemd service configuration for continuous operation
+The configuration system provides centralized settings for all components:
 
-## Error Handling and Resilience
+```python
+# Configuration flows through all components
+settings = ViStreamASRSettings()
 
-### Error Categories
-- **Model Loading Failures**: Network issues, corrupted downloads
-- **Audio Processing Errors**: Invalid formats, sample rate mismatches
-- **Memory Issues**: GPU out-of-memory, insufficient RAM
-- **Device Issues**: Microphone access, audio device conflicts
+# CLI Interface
+transcribe_file(file_path, settings, show_progress=True)
+
+# Streaming Interface
+streaming_asr = StreamingASR(settings=settings)
+for result in streaming_asr.stream_from_file(file_path):
+    process_result(result)
+
+# Core Processing
+engine = ASREngine(
+    chunk_size_ms=settings.model.chunk_size_ms,
+    debug_mode=settings.model.debug
+)
+engine.initialize_models()
+```
+
+### 2. VAD Integration
+
+VAD processing is seamlessly integrated throughout the system:
+
+```python
+# Configuration
+settings.vad.enabled = True
+settings.vad.threshold = 0.5
+
+# Streaming Interface
+streaming_asr = StreamingASR(settings=settings)
+for result in streaming_asr.stream_from_file(file_path, use_vad=True):
+    process_result(result)
+
+# Core Processing
+vad_processor = _create_vad_processor()
+if vad_processor:
+    speech_segments = vad_processor.detect_speech_segments(audio_chunks)
+```
+
+### 3. State Management
+
+State is managed consistently across components:
+
+```python
+# Core Processing State
+engine = ASREngine()
+engine.initialize_models()
+for audio_chunk in audio_stream:
+    result = engine.process_audio_chunk(audio_chunk)
+    rtf = engine.get_asr_rtf()
+
+# CLI Interface State
+transcription = transcribe_file(file_path, settings)
+print(f"Final transcription: {transcription}")
+```
+
+## Performance Characteristics
+
+### Processing Performance
+
+- **Real-Time Factor**: Maintains RTF < 0.1 for real-time applications
+- **Throughput**: Processes >100 chunks per second on modern hardware
+- **Memory Usage**: <10MB runtime overhead, ~2MB model size
+- **Latency**: End-to-end processing latency <50ms for microphone streaming
+
+### Scalability
+
+- **Horizontal Scaling**: Components are stateless and can be distributed
+- **Resource Management**: Efficient memory usage with proper cleanup
+- **Configuration Flexibility**: Supports various deployment scenarios
+- **Error Resilience**: Graceful degradation under failure conditions
+
+### Optimization Strategies
+
+- **Lazy Initialization**: Components loaded only when needed
+- **Batch Processing**: Efficient processing of multiple chunks
+- **GPU Acceleration**: Automatic GPU detection and utilization
+- **Model Caching**: Models cached after first load
+
+## Error Handling and Recovery
+
+### Error Classification
+
+1. **Configuration Errors**:
+
+   - Invalid parameter values
+   - Missing configuration files
+   - Environment variable issues
+
+2. **Audio Processing Errors**:
+
+   - Unsupported audio formats
+   - Corrupted audio files
+   - Microphone access issues
+
+3. **Model Errors**:
+
+   - Model loading failures
+   - Model inference errors
+   - Memory allocation issues
+
+4. **Streaming Errors**:
+   - File access issues
+   - Microphone recording failures
+   - Network connectivity problems
 
 ### Recovery Mechanisms
-- **Model Caching**: Automatic retry with cached models
-- **Chunk Processing**: Skip problematic chunks while continuing
-- **Graceful Degradation**: Fallback to CPU if GPU fails
-- **User Feedback**: Clear error messages and troubleshooting guidance
 
-## Development and Maintenance
+- **Graceful Degradation**: Fallback to basic functionality when advanced features fail
+- **Automatic Retry**: Retry failed operations with exponential backoff
+- **State Recovery**: Maintain state across error conditions
+- **User Feedback**: Clear error messages and recovery suggestions
 
-### Code Organization
-```
-src/
-├── core.py           # Core ASR engine and processing
-├── streaming.py      # High-level streaming interface
-└── cli.py           # Command-line interface
+## Testing Strategy
 
-docs/
-├── ARCHITECTURE.md          # System architecture and design
-├── COMPONENT_CORE_PROCESSING_DOCS.md     # Core processing documentation
-├── COMPONENT_STREAMING_INTERFACE_DOCS.md # Streaming interface documentation
-├── COMPONENT_CLI_INTERFACE_DOCS.md       # CLI interface documentation
-└── COMPONENT_OVERVIEW.md    # This overview document
-```
+### Unit Testing
 
-### Testing Strategy
-- **Unit Tests**: Individual component testing
-- **Integration Tests**: End-to-end workflow testing
-- **Performance Tests**: RTF and accuracy benchmarking
-- **Error Scenarios**: Graceful failure testing
+Each component has comprehensive unit test coverage:
 
-## Future Enhancements
+- **CLI Interface**: Test file processing, microphone handling, and configuration loading
+- **Streaming Interface**: Test facade functionality, specialized streamers, and VAD integration
+- **Core Processing**: Test model loading, audio processing, and state management
+- **Configuration**: Test parameter validation and hierarchical configuration
+- **VAD Processing**: Test speech detection and integration
 
-### Planned Features
-- **Model Support**: Additional language models and custom model loading
-- **Advanced Audio Processing**: Noise reduction, voice activity detection
-- **Multi-language Support**: Beyond Vietnamese to other languages
-- **Cloud Integration**: Cloud-based model hosting and processing
+### Integration Testing
 
-### Performance Improvements
-- **Quantization**: Model quantization for reduced memory usage
-- **Optimization**: Further RTF improvements and latency reduction
-- **Batch Processing**: Enhanced batch processing capabilities
-- **Caching Strategies**: Improved model and feature caching
+End-to-end integration testing covers:
 
-## Related Documentation
+- **Complete Workflows**: File transcription and microphone streaming
+- **Component Integration**: Integration between different components
+- **Configuration Integration**: Full configuration system testing
+- **Error Scenarios**: Error handling and recovery validation
+- **Performance Testing**: Real-time performance and scalability testing
 
-- **[`ARCHITECTURE.md`](ARCHITECTURE.md)**: Detailed system architecture and deployment considerations
-- **[`COMPONENT_CORE_PROCESSING_DOCS.md`](COMPONENT_CORE_PROCESSING_DOCS.md)**: Core processing implementation details
-- **[`COMPONENT_STREAMING_INTERFACE_DOCS.md`](COMPONENT_STREAMING_INTERFACE_DOCS.md)**: Streaming interface API documentation
-- **[`COMPONENT_CLI_INTERFACE_DOCS.md`](COMPONENT_CLI_INTERFACE_DOCS.md)**: Command-line interface reference
+### Performance Testing
 
-## Dependencies
+Performance validation includes:
 
-### Core Dependencies
-- **torch**: Deep learning framework
-- **torchaudio**: Audio processing and loading
-- **numpy**: Numerical computations
-- **sounddevice**: Real-time audio input
+- **Real-Time Processing**: RTF validation under various conditions
+- **Memory Usage**: Memory consumption monitoring
+- **Throughput**: Maximum processing rate measurement
+- **Latency**: End-to-end latency testing
+- **Load Testing**: Performance under high load conditions
 
-### Optional Dependencies
-- **cuda**: GPU acceleration (optional)
-- **argparse**: Command-line argument parsing
-- **requests**: Model downloading and caching
+## Deployment Considerations
+
+### Environment Requirements
+
+- **Python**: 3.8+ with PyTorch 2.7.1+
+- **Memory**: Minimum 4GB RAM, 8GB recommended
+- **Storage**: 2GB for models and dependencies
+- **CPU**: Multi-core processor recommended
+- **GPU**: Optional, CUDA-compatible GPU recommended
+
+### Deployment Options
+
+1. **Standalone Application**:
+
+   - Direct execution via CLI
+   - Local model loading and caching
+   - Single-user deployment
+
+2. **Server Deployment**:
+
+   - REST API wrapper around core components
+   - Model server for shared model instances
+   - Multi-user support with session management
+
+3. **Cloud Deployment**:
+   - Container-based deployment with Docker
+   - Auto-scaling for variable workloads
+   - Load balancing for high availability
+
+### Configuration Management
+
+- **Environment Variables**: Override configuration via environment
+- **Configuration Files**: TOML-based configuration files
+- **CLI Arguments**: Direct parameter override via command line
+- **Validation**: Automatic configuration validation
+
+## Future Roadmap
+
+### Short-term Enhancements
+
+1. **Performance Optimization**:
+
+   - Further optimization for low-latency processing
+   - Enhanced model quantization support
+   - Improved memory management
+
+2. **Feature Enhancements**:
+
+   - Advanced punctuation handling
+   - Speaker diarization support
+   - Multi-language support extension
+
+3. **Developer Experience**:
+   - Enhanced debugging tools
+   - Better error reporting
+   - Improved documentation
+
+### Medium-term Goals
+
+1. **Architecture Improvements**:
+
+   - Plugin system for custom components
+   - Advanced streaming strategies
+   - Enhanced state management
+
+2. **Integration Enhancements**:
+
+   - Cloud service integration
+   - Database integration for session management
+   - Advanced monitoring and analytics
+
+3. **Ecosystem Expansion**:
+   - Web-based interface
+   - Mobile application support
+   - Third-party tool integrations
+
+### Long-term Vision
+
+1. **Advanced AI Features**:
+
+   - Custom model training support
+   - Real-time language detection
+   - Advanced noise cancellation
+
+2. **Platform Evolution**:
+
+   - Multi-platform deployment
+   - Edge computing support
+   - Distributed processing
+
+3. **Ecosystem Growth**:
+   - Developer SDK
+   - Marketplace for custom models
+   - Community-driven enhancements
+
+## Migration and Compatibility
+
+### Backward Compatibility
+
+The refactored system maintains backward compatibility:
+
+- **API Compatibility**: Public interfaces remain stable
+- **Configuration Compatibility**: Existing configuration files work unchanged
+- **CLI Compatibility**: Existing command-line usage continues to work
+- **Data Compatibility**: Input/output formats remain consistent
+
+### Migration Path
+
+For users upgrading from previous versions:
+
+1. **Direct Upgrade**: Existing code continues to work without changes
+2. **Configuration Migration**: Gradual migration to new configuration system
+3. **Feature Migration**: Optional migration to new features and capabilities
+4. **Performance Migration**: Gradual adoption of performance optimizations
+
+### Deprecation Policy
+
+- **Notice Period**: Minimum 6 months notice for deprecations
+- **Alternative Support**: Provide alternatives for deprecated features
+- **Gradual Migration**: Support multiple versions during transition
+- **Documentation**: Clear documentation of deprecation timeline
 
 ## Conclusion
 
-ViStreamASR provides a comprehensive, modular streaming ASR system designed for real-time applications. The component-based architecture allows for flexible integration and easy extension while maintaining high performance and reliability. The system successfully balances accuracy, latency, and computational efficiency through sophisticated model management, audio processing, and decoding strategies.
+The refactored ViStreamASR system represents a significant improvement in architecture, maintainability, and extensibility. By implementing Domain-Driven Design principles and the Facade Pattern, the system now provides:
 
-For detailed information about specific components, refer to the respective component documentation linked above.
+- **Clear Separation of Concerns**: Each component has a single, well-defined responsibility
+- **Improved Maintainability**: Smaller, focused components are easier to understand and modify
+- **Enhanced Testability**: Individual components can be tested in isolation
+- **Better Performance**: Optimized processing patterns maintain or improve performance
+- **Greater Extensibility**: New features and components can be easily added
+- **Robust Error Handling**: Comprehensive error handling and recovery mechanisms
+
+The system maintains full backward compatibility while providing a foundation for future enhancements and growth. The modular architecture allows for easy extension and customization, making ViStreamASR suitable for a wide range of speech recognition applications and deployment scenarios.

@@ -11,10 +11,6 @@ chunk_size_ms = 640
 # Range: 0.5-60.0s, default: 15.0s
 auto_finalize_after = 15.0
 
-# Enable debug mode for detailed processing information
-# Options: true/false, default: false
-debug = false
-
 [vad]
 # Enable voice activity detection to filter silence periods
 # Options: true/false, default: false
@@ -28,7 +24,7 @@ threshold = 0.5
 # Minimum speech duration in milliseconds
 # Speech segments shorter than this will be ignored
 # Range: >100ms, default: 250ms
-min_speech_duration_ms = 250
+min_speech_duration_ms = 500
 
 # Minimum silence duration in milliseconds
 # Silence periods shorter than this won't end speech segments
@@ -38,7 +34,7 @@ min_silence_duration_ms = 500
 # Padding added to speech segments in milliseconds
 # Helps ensure complete speech capture
 # Range: >0ms, default: 30ms
-speech_pad_ms = 30
+speech_pad_ms = 100
 
 # Audio sample rate for VAD processing
 # Options: 8000/16000, default: 16000

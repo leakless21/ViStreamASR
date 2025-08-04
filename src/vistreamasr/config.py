@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Dict, Any, Union
 
+from loguru import logger
 from pydantic import BaseModel, Field, validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 
@@ -35,10 +36,7 @@ class ModelConfig(BaseModel):
         description="Maximum duration in seconds before auto-finalizing a segment"
     )
     
-    debug: bool = Field(
-        default=False,
-        description="Enable debug mode for detailed processing information"
-    )
+    
 
 
 class VADConfig(BaseModel):
@@ -69,7 +67,7 @@ class VADConfig(BaseModel):
     )
     
     speech_pad_ms: int = Field(
-        default=30,
+        default=100,
         gt=0,
         description="Padding added to speech segments in milliseconds"
     )
@@ -83,9 +81,14 @@ class VADConfig(BaseModel):
 class LoggingConfig(BaseModel):
     """Configuration for logging system."""
     
-    level: str = Field(
+    file_log_level: str = Field(
         default="INFO",
-        description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
+        description="Set the file logging level."
+    )
+    
+    console_log_level: str = Field(
+        default="INFO",
+        description="Set the console logging level."
     )
     
     rotation: Optional[str] = Field(
@@ -110,6 +113,10 @@ class LoggingConfig(BaseModel):
     enable_colors: bool = Field(
         default=True,
         description="Enable colored output for console logs"
+    )
+    log_to_json: bool = Field(
+        default=False,
+        description="Enable JSON file logging."
     )
 
 
@@ -240,26 +247,29 @@ _settings: Optional[ViStreamASRSettings] = None
 
 
 def get_settings(config_path: Optional[Path] = None) -> ViStreamASRSettings:
-    """
-    Get the global settings instance, loading from TOML if not already loaded.
     
-    Args:
-        config_path: Optional path to TOML configuration file
-        
-    Returns:
-        ViStreamASRSettings instance
-    """
     global _settings
     if _settings is None:
+        
         # DEBUG: Log sys.argv before settings instantiation
-        print(f"DEBUG config.py get_settings: sys.argv = {sys.argv}")
+        # logger.debug(f"DEBUG config.py get_settings: sys.argv = {sys.argv}") # logger might not be set up
+        
+
         
         _settings = ViStreamASRSettings.load_from_toml(config_path)
+            
         
-        # DEBUG: Confirm model_config after instantiation
-        print(f"DEBUG config.py get_settings: ViStreamASRSettings.model_config.cli_parse_args = {_settings.model_config.get('cli_parse_args')}")
+
+
+        return _settings
+             
         
+
+    
+    
     return _settings
+    
+        
 
 
 def reset_settings() -> None:
