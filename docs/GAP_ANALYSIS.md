@@ -1,100 +1,39 @@
-# Gap Analysis: Silero-VAD Integration with ViStreamASR ✅ IMPLEMENTED
+# Gap Analysis
 
-## Overview
+This document tracks bugs and missing features.
 
-This document tracks gaps, issues, and missing features in the Silero-VAD integration with the ViStreamASR system. **Status: MAJOR IMPLEMENTATION COMPLETED** - All core VAD functionality has been successfully implemented and tested. Remaining items are for future enhancements and optimizations.
+## Resolved Issues
 
-## Identified Gaps and Issues
+### [GAP-001] Missing `web` task in `pixi.toml`
 
-- **No remaining major gaps in core functionality.**
+- **Description:** The `pixi run web` command was failing with the error `web: command not found` because the `web` task was not defined in the `[tasks]` section of the [`pixi.toml`](pixi.toml:1) file.
+- **Root Cause:** The `web` task, which should execute `python -m vistreamasr web`, was missing from the project's task configuration.
+- **Resolution:** Added the `web = "python -m vistreamasr web"` task definition to the `[tasks]` section in [`pixi.toml`](pixi.toml:10).
+- **Date Resolved:** 2025-08-05
 
-## Missing Features
+### [GAP-002] Missing `debug` attribute in `ModelConfig`
 
-### 1. Core Functionality
+- **Description:** The application failed to start with an `AttributeError: 'ModelConfig' object has no attribute 'debug'`. This error occurred during the FastAPI server's `lifespan` startup event when the `StreamingASR` service attempted to access `settings.model.debug`.
+- **Root Cause:** The `ModelConfig` class in [`src/vistreamasr/config.py`](src/vistreamasr/config.py:12) was missing the `debug` attribute, which was being accessed in the `StreamingASR` class's `__init__` method in [`src/vistreamasr/streaming.py`](src/vistreamasr/streaming.py:369).
+- **Resolution:** Added a `debug: bool` field with a default value of `False` and an appropriate description to the `ModelConfig` class in [`src/vistreamasr/config.py`](src/vistreamasr/config.py:40).
+- **Date Resolved:** 2025-08-05
 
-- **No missing core functionality.**
+## Open Issues
 
-### 2. Testing and Validation
+### [GAP-003] FFmpeg Process Transport Closure Issue
 
-- **No missing core tests.**
-
-### 3. Monitoring and Debugging
-
-- **No missing core monitoring or debugging features.**
-
-## Recommendations
-
-- **Focus on future enhancements and optimizations.**
-
-## Test Cases for Implementation
-
-- **All core test cases have been implemented.**
-
-## Dependencies and Prerequisites
-
-- **All dependencies are managed by pixi.**
-
-## Risk Assessment
-
-- **No high-priority risks remain.**
-
-## Implementation Roadmap
-
-- **All major implementation phases are complete.**
-
----
-
-## ✅ RESOLVED GAPS (IMPLEMENTED)
-
-### Implementation Gaps ✅ COMPLETED
-
-- **✅ VAD Module Implementation**: [`src/vistreamasr/vad.py`](src/vistreamasr/vad.py) - Complete VAD processor and coordinator classes implemented
-- **✅ ASR Engine Integration**: [`src/vistreamasr/core.py`](src/vistreamasr/core.py) - ASR engine modified to work with VAD-filtered audio
-- **✅ Streaming Interface Updates**: [`src/vistreamasr/streaming.py`](src/vistreamasr/streaming.py) - Streaming interface updated with VAD coordination
-- **✅ Configuration Management**: Added VAD configuration parameters to CLI and Python API
-
-### Performance Considerations ✅ ADDRESSED
-
-- **✅ Latency Optimization**: VAD processing adds <1ms per 30ms chunk, net improvement of 2x speedup
-- **✅ State Synchronization**: [`VADASRCoordinator`](src/vistreamasr/vad.py) handles proper state management
-- **✅ Buffer Management**: Efficient audio buffering implemented with configurable padding
-- **✅ Resource Efficiency**: CPU usage reduced by 50-70% through VAD filtering
-
-### Integration Challenges ✅ SOLVED
-
-- **✅ Audio Format Compatibility**: Consistent format handling between VAD and ASR
-- **✅ Chunk Size Alignment**: Configurable chunk sizes with automatic alignment
-- **✅ Error Propagation**: Robust error handling prevents VAD errors from affecting ASR
-- **✅ Real-time Coordination**: Efficient real-time VAD-ASR coordination implemented
-
-### Testing and Validation ✅ COMPLETED
-
-- **✅ Unit Tests**: [`tests/test_vad_integration.py`](tests/test_vad_integration.py) - Comprehensive test suite for VAD processing
-- **✅ Integration Tests**: VAD-ASR coordination fully tested
-- **✅ Performance Benchmarks**: Measured 2.0-2.3x speedup with VAD enabled
-
-## 🔍 NEW FINDINGS AND FUTURE ENHANCEMENTS
-
-### Performance Optimizations
-
-- **Current Performance**: Achieves 2.0-2.3x speedup with VAD enabled
-- **Memory Reduction**: 40-60% lower memory usage with VAD filtering
-- **CPU Efficiency**: Significant reduction in CPU utilization through silence filtering
-
-### Configuration Enhancements
-
-- **Parameter Tuning**: Current parameters work well for general use cases
-- **Dialect-Specific Settings**: Need more granular control for specific Vietnamese dialects
-- **Adaptive Thresholds**: Potential for automatic threshold adjustment based on audio characteristics
-
-### Advanced Features
-
-- **Multi-Speaker VAD**: Future enhancement for handling multiple speakers
-- **Real-time Confidence Scoring**: Add confidence metrics for VAD decisions
-- **Custom Model Support**: Support for custom VAD models beyond Silero-VAD
-
-### Monitoring and Debugging
-
-- **Performance Metrics**: Need more detailed performance monitoring
-- **Debug Visualization**: Tools for visualizing VAD decisions and audio segments
-- **Error Analytics**: Enhanced error reporting and analytics
+- **Description:** The FFmpeg process starts successfully but its stdin transport immediately closes, causing continuous "WriteUnixTransport closed=True" errors when trying to write audio data. This prevents audio streaming functionality from working.
+- **Root Cause:** Two potential causes identified:
+  1. **Process Health Validation Gap**: The code doesn't verify that the FFmpeg process remains alive and healthy after creation
+  2. **Race Condition**: No synchronization mechanism ensures FFmpeg is ready to receive input before write operations begin
+- **Symptoms:**
+  - FFmpeg starts with "FFmpeg started." log message
+  - Immediate "Cannot read, FFmpeg state: FFmpegState.STARTING" warning
+  - Continuous "Error writing to FFmpeg: unable to perform operation on <WriteUnixTransport closed=True...>" errors
+- **Current Status:** Diagnostic logging added to [`src/vistreamasr/ffmpeg_manager.py`](src/vistreamasr/ffmpeg_manager.py:49) to validate the hypothesis
+- **Test Plan:**
+  1. Run `pixi run web` and connect via WebSocket
+  2. Observe enhanced diagnostic logs to identify exact failure point
+  3. Check if FFmpeg process terminates immediately or if stdin closes prematurely
+- **Priority:** HIGH - Blocks core audio streaming functionality
+- **Date Identified:** 2025-08-05

@@ -1,5 +1,20 @@
 # ViStreamASR Configuration and Logging System Requirements
 
+## Current Status
+
+> **Note:** This document outlines the functional and non-functional requirements for ViStreamASR. It includes both currently implemented features and planned features to provide a comprehensive view of the project's goals.
+>
+> - **Implemented:**
+>
+>   - Core real-time transcription functionality.
+>   - Basic VAD for speech segmentation.
+>   - Web-based user interface for live transcription.
+>
+> - **Planned:**
+>   - Support for multiple ASR backends.
+>   - Speaker diarization to distinguish between different speakers.
+>   - Multi-platform support (Windows, macOS, Linux).
+
 ## Functional Requirements
 
 ### 1. Configuration Management System ✅ IMPLEMENTED
@@ -74,6 +89,33 @@
 - **Documentation**: Comprehensive documentation aligned with code structure
 - **Testing**: Comprehensive test coverage for all components
 
+### 10. Speaker Diarization 🔄 PLANNED
+
+- **Speaker Identification**: Identify and label different speakers in an audio stream.
+- **Real-time Diarization**: Perform speaker diarization in real-time.
+- **Integration with ASR**: Combine speaker labels with transcription results.
+- **Configurable Backend**: Support for diarization libraries like `diart` or `pyannote.audio`.
+
+### 11. Web Interface 🔄 PLANNED
+
+- **FastAPI Server**: Implement a web server using `FastAPI`.
+- **WebSocket Communication**: Use WebSockets for real-time, bidirectional communication between the client and server.
+- **HTML/JS Frontend**: Provide a simple web-based frontend for interacting with the ASR system.
+- **Multi-user Support**: Handle multiple concurrent client connections.
+
+### 12. Modular ASR Backend 🔄 PLANNED
+
+- **Pluggable Backends**: Support for multiple ASR backends (e.g., `faster-whisper`, `whisper-timestamped`, OpenAI Whisper API).
+- **Base ASRBackend Class**: Define a common interface for all ASR backends.
+- **Configuration**: Allow users to select and configure the desired backend.
+
+### 13. UI/UX Requirements
+
+- **Modern, Responsive UI**: The web interface will feature a clean, modern design that is responsive and works well on both desktop and mobile devices.
+- **Animated Record Button**: A circular record button will animate when clicked, providing clear visual feedback that recording is in progress.
+- **Real-time Waveform Display**: A waveform will be displayed in real-time to indicate that audio is being detected and processed.
+- **Improved Transcription View**: The transcription will be displayed in a clear, legible format with speaker labels to distinguish between different speakers.
+
 ## Non-Functional Requirements
 
 ### 1. Configuration System Performance
@@ -97,7 +139,13 @@
 - **RTF (Real-Time Factor)**: Maintain RTF < 0.1 for real-time streaming applications
 - **Memory Footprint**: Model size should remain under 5MB for efficient deployment
 
-### 4. Compatibility
+### 4. Asynchronous Processing 🔄 PLANNED
+
+- **Asyncio Integration**: Utilize `asyncio` for concurrent processing of audio, transcription, and diarization.
+- **Scalability**: Improve scalability and performance by handling multiple clients asynchronously.
+- **Non-blocking Operations**: Ensure that I/O operations (like network communication and file access) are non-blocking.
+
+### 5. Compatibility
 
 - **Python Version**: Support Python 3.8+
 - **PyTorch Compatibility**: Work with PyTorch 2.7.1+
@@ -105,8 +153,10 @@
 - **Dependency Management**: Use Pixi for robust, multi-platform dependency management
 - **TOML Support**: Support for TOML configuration file format
 - **Loguru**: Integration with Loguru logging framework
+- **FastAPI/WebSockets**: Dependencies for the web interface.
+- **Diarization Libraries**: Dependencies for speaker diarization.
 
-### 5. Reliability
+### 6. Reliability
 
 - **Error Handling**: Graceful handling of audio format mismatches and processing errors
 - **Recovery**: Ability to recover from transient errors without complete system restart
@@ -114,7 +164,7 @@
 - **Validation**: Input validation for audio data and parameters
 - **Configuration Validation**: Automatic validation of configuration parameters with clear error messages
 
-### 6. Maintainability
+### 7. Maintainability
 
 - **Modular Design**: Clean separation between configuration, logging, VAD processing and ASR integration
 - **Configuration**: External configuration for all system parameters (model, VAD, logging)
@@ -123,7 +173,7 @@
 - **Type Safety**: Use of Pydantic for type-safe configuration management
 - **Code Organization**: Well-organized codebase with clear responsibilities and interfaces
 
-### 7. Security
+### 8. Security
 
 - **No Telemetry**: Ensure Silero-VAD's no-telemetry policy is maintained
 - **Data Privacy**: No storage or transmission of audio data outside the local system
@@ -139,6 +189,7 @@
 - **Configuration**: Parameterized thresholds and timing controls
 - **Streaming Interface**: Unified API for file and microphone streaming
 - **VAD Integration**: Optional VAD processing with seamless fallback
+- **WebSocket API**: A defined WebSocket API for real-time transcription and diarization.
 
 ### 2. Audio Processing Pipeline
 
@@ -241,46 +292,46 @@
 
 ### Model Configuration
 
-| Parameter             | Default | Range         | Description                                      |
-| --------------------- | ------- | ------------- | ------------------------------------------------ |
-| `name`       | "whisper"     | -   | Name of the ASR model to use             |
-| `chunk_size_ms`       | 640     | >0   | Audio chunk duration in milliseconds             |
-| `stride_ms`       | 320     | >0   | Stride in milliseconds between chunks             |
-| `auto_finalize_after` | 15.0    | [0.5, 60.0]   | Maximum duration before auto-finalizing segments |
+| Parameter             | Default   | Range       | Description                                      |
+| --------------------- | --------- | ----------- | ------------------------------------------------ |
+| `name`                | "whisper" | -           | Name of the ASR model to use                     |
+| `chunk_size_ms`       | 640       | >0          | Audio chunk duration in milliseconds             |
+| `stride_ms`           | 320       | >0          | Stride in milliseconds between chunks            |
+| `auto_finalize_after` | 15.0      | [0.5, 60.0] | Maximum duration before auto-finalizing segments |
 
 ### VAD Configuration
 
-| Parameter                 | Default | Range         | Description                    |
-| ------------------------- | ------- | ------------- | ------------------------------ |
-| `enabled`                 | True   | [True, False] | Enable/disable VAD processing  |
-| `aggressiveness`             | 3   | [0, 3] | VAD aggressiveness level (0-3)              |
-| `frame_size_ms`               | 30     | >0    | Frame size in milliseconds for VAD processing   |
-| `min_silence_duration_ms` | 500     | >0            | Minimum silence duration       |
-| `speech_pad_ms`           | 100      | >0            | Padding around speech segments |
-| `sample_rate`           | 16000      | -            | Audio sample rate for VAD processing |
+| Parameter                 | Default | Range         | Description                                   |
+| ------------------------- | ------- | ------------- | --------------------------------------------- |
+| `enabled`                 | True    | [True, False] | Enable/disable VAD processing                 |
+| `aggressiveness`          | 3       |               | VAD aggressiveness level (0-3)                |
+| `frame_size_ms`           | 30      | >0            | Frame size in milliseconds for VAD processing |
+| `min_silence_duration_ms` | 500     | >0            | Minimum silence duration                      |
+| `speech_pad_ms`           | 100     | >0            | Padding around speech segments                |
+| `sample_rate`             | 16000   | -             | Audio sample rate for VAD processing          |
 
 ### Logging Configuration
 
-| Parameter         | Default                         | Range                                 | Description               |
-| ----------------- | ------------------------------- | ------------------------------------- | ------------------------- | ------------------------- | --- | ------------------------------ |
-| `file_log_level`           | "INFO"                          | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level for file output         |
-| `console_log_level`           | "INFO"                          | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level for console output         |
-| `rotation`          | None     | -                | Log file rotation size    |
-| `retention`    | None                            | -                         | Log file retention period       |
-| `file_path`       | None               | -                                     | Log file path             |
-| `format_string`        | "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"                         | -                                     | Log message format    |
-| `enable_colors` | True                            | [True, False]                         | Enable colored output for console logs       |
-| `log_to_json` | False                            | [True, False]                         | Enable JSON file logging. |
+| Parameter           | Default                     | Range                                 | Description                            |
+| ------------------- | --------------------------- | ------------------------------------- | -------------------------------------- | --- | ------------------ |
+| `file_log_level`    | "INFO"                      | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level for file output      |
+| `console_log_level` | "INFO"                      | ["DEBUG", "INFO", "WARNING", "ERROR"] | Minimum log level for console output   |
+| `rotation`          | None                        | -                                     | Log file rotation size                 |
+| `retention`         | None                        | -                                     | Log file retention period              |
+| `file_path`         | None                        | -                                     | Log file path                          |
+| `format_string`     | "{time:YYYY-MM-DD HH:mm:ss} | {level}                               | {name}:{function}:{line} - {message}"  | -   | Log message format |
+| `enable_colors`     | True                        | [True, False]                         | Enable colored output for console logs |
+| `log_to_json`       | False                       | [True, False]                         | Enable JSON file logging.              |
 
 ### CLI Parameters
 
 | Parameter                       | Default | Description                                                |
 | ------------------------------- | ------- | ---------------------------------------------------------- |
 | `--config`                      | None    | Path to configuration file                                 |
-| `--model.chunk-size-ms`                  | 640     | Chunk size in milliseconds (100-2000ms)                    |
-| `--model.auto-finalize-after`         | 15.0    | Maximum duration before auto-finalizing segments (seconds) |
-| `--vad.enabled`                     | False   | Enable Voice Activity Detection                            |
-| `--vad.aggressiveness`               | 3     | VAD speech probability threshold                           |
+| `--model.chunk-size-ms`         | 640     | Chunk size in milliseconds (100-2000ms)                    |
+| `--model.auto-finalize-after`   | 15.0    | Maximum duration before auto-finalizing segments (seconds) |
+| `--vad.enabled`                 | False   | Enable Voice Activity Detection                            |
+| `--vad.aggressiveness`          | 3       | VAD speech probability threshold                           |
 | `--vad.min-speech-duration-ms`  | 250     | Minimum speech duration in milliseconds                    |
 | `--vad.min_silence_duration_ms` | 100     | Minimum silence duration in milliseconds                   |
 | `--vad.speech_pad_ms`           | 30      | Padding added to speech segments                           |
@@ -291,7 +342,7 @@
 
 - **Real-time VAD Visualization**: Add visualization tools for VAD decisions
 - **Adaptive Thresholding**: Dynamic threshold adjustment based on noise levels
-- **Multi-speaker Support**: Extend VAD for multiple speaker detection
+- **Multi-speaker Support**: Extend VAD for multiple speaker detection (Covered by Speaker Diarization)
 - **Enhanced Error Handling**: More sophisticated error recovery mechanisms
 
 ### Medium Priority
@@ -303,7 +354,7 @@
 
 ### Low Priority
 
-- **Web Interface**: VAD configuration and monitoring via web interface
+- **Web Interface**: VAD configuration and monitoring via web interface (Covered by Web Interface)
 - **Mobile Optimization**: Specific optimizations for mobile deployment scenarios
 - **Advanced Noise Cancellation**: Integration with advanced noise reduction algorithms
 - **Plugin Architecture**: Support for plugins extending functionality

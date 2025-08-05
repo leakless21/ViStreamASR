@@ -32,6 +32,7 @@ symbols = {
     'stopwatch': '⏱️' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[TIME]',
     'speaker': '🔊' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[SPEAKER]',
     'stop': '⏹️' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[STOP]',
+    'globe': '🌐' if sys.stdout.encoding and 'utf' in sys.stdout.encoding.lower() else '[WEB]',
 }
 
 # Handle import for both installed package and development mode
@@ -260,6 +261,58 @@ def transcribe_microphone_streaming(duration_seconds, settings: ViStreamASRSetti
     return 0
 
 
+def start_web_server(settings: ViStreamASRSettings, args):
+    """
+    Starts the FastAPI web server for the ASR web interface.
+    
+    Args:
+        settings: ViStreamASRSettings configuration (currently unused by server but passed for consistency)
+        args: Command-line arguments, including host and port for the web server.
+    """
+    log_with_symbol(symbols['globe'], "ViStreamASR Web Server")
+    log_with_symbol(symbols['tool'], "Initializing web server...")
+    
+    try:
+        import uvicorn
+        from .web.server import app as fastapi_app
+    except ImportError as e:
+        log_with_symbol(symbols['stop'], f"Error importing web server dependencies: {e}", "error")
+        log_with_symbol(symbols['tool'], "Please ensure 'fastapi' and 'uvicorn[standard]' are installed.", "info")
+        log_with_symbol(symbols['tool'], "You can install them using: pip install fastapi 'uvicorn[standard]'", "info")
+        return 1
+    
+    # Determine the path to the static directory relative to this server.py file
+    # This ensures that the server can find the static files regardless of CWD
+    # when the CLI command is run.
+    # server.py is in src/vistreamasr/web/
+    # static files are in src/vistreamasr/web/static/
+    # We need to pass an absolute path to StaticFiles or ensure uvicorn runs from web/
+    
+    # For simplicity with uvicorn.run, we'll assume the CLI is run from a context
+    # where `src.vistreamasr.web.server` can be imported and `static` dir is relative.
+    # If issues arise, the path in server.py for StaticFiles might need to be absolute
+    # or uvicorn might need to be run with a specific `app_dir`.
+    
+    host = args.host
+    port = args.port
+    
+    log_with_symbol(symbols['globe'], f"Starting server on http://{host}:{port}")
+    log_with_symbol(symbols['globe'], f"WebSocket endpoint: ws://{host}:{port}/asr")
+    log_with_symbol(symbols['globe'], f"Web UI: http://{host}:{port}/static/index.html")
+    log_with_symbol(symbols['stop'], "Press Ctrl+C to stop the server.")
+
+    try:
+        uvicorn.run(fastapi_app, host=host, port=port)
+    except ImportError:
+        # This might happen if uvicorn is not found, though the check above should catch it.
+        log_with_symbol(symbols['stop'], "Uvicorn not found. Please install it: pip install uvicorn", "error")
+        return 1
+    except Exception as e:
+        log_with_symbol(symbols['stop'], f"Error running web server: {e}", "error")
+        return 1
+    return 0 # Should not be reached if uvicorn runs correctly
+
+
 @logger.catch
 def main():
     """Main CLI entry point."""
@@ -278,6 +331,8 @@ Examples:
   %(prog)s microphone                                              # Record from microphone indefinitely
   %(prog)s microphone --duration 30                               # Record for 30 seconds
   %(prog)s microphone --config path/to/config.toml                # Use custom config
+
+  %(prog)s web                                                     # Start the web server
         """
     )
     
@@ -415,6 +470,16 @@ Examples:
         type=int,
         help='Padding added to speech segments in milliseconds (default: 30ms)'
     )
+
+    # Web command
+    web_parser = subparsers.add_parser(
+        'web',
+        help='Start the ViStreamASR web server',
+        description='Starts a FastAPI web server with a WebSocket endpoint for ASR and serves a web UI.'
+    )
+    # Add server-specific arguments here if needed, e.g., --host, --port
+    web_parser.add_argument('--host', type=str, default='127.0.0.1', help='Host for the web server')
+    web_parser.add_argument('--port', type=int, default=8001, help='Port for the web server')
     
     # Info command
     info_parser = subparsers.add_parser(
@@ -507,6 +572,13 @@ Examples:
             settings.vad.speech_pad_ms = getattr(args, 'vad.speech_pad_ms')
         
         return transcribe_microphone_streaming(args.duration, settings)
+
+    elif args.command == 'web':
+        # For the web command, model/VAD settings are not directly used by the basic server
+        # but we pass the settings object for consistency or future use.
+        # If specific server settings (host, port) were added as CLI args, they'd be parsed here.
+        # For now, host and port are hardcoded in start_web_server.
+        return start_web_server(settings, args)
     
     elif args.command == 'info':
         log_with_symbol(symbols['mic'], "ViStreamASR - Vietnamese Streaming ASR Library")

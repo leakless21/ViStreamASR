@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ViStreamASR Web Interface</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>ViStreamASR Web Interface</h1>
+    <div id="controls">
+      <div id="waveformContainer">
+        <canvas id="waveform"></canvas>
+      </div>
+      <button id="recordButton" aria-label="Start Recording">🎤</button>
+    </div>
+    <div id="status">Status: Idle</div>
+    <div id="transcriptContainer">
+      <!-- Transcripts will be added here dynamically -->
+      <div id="partialTranscript"></div>
+    </div>
+
+    <script src="client.js"></script>
+  </body>
+</html>

@@ -37,6 +37,11 @@ class ModelConfig(BaseModel):
     )
     
     
+    debug: bool = Field(
+        default=False,
+        description="Enable debug logging for the ASR model"
+    )
+    
 
 
 class VADConfig(BaseModel):
